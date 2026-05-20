@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }}</title>
+  <!-- Plotly served from local static — zero CDN calls -->
+  <script src="/static/js/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1e3a5f;
+      color: #fff;
+      padding: 1.1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem 2rem; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: .8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #2563eb;
+      border-left: 3px solid #2563eb;
+      padding-left: .6rem;
+      margin: 1.8rem 0 .9rem;
+    }
+
+    /* ── KPI cards ── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 1rem;
+    }
+    .kpi-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .kpi-card .label { font-size: .72rem; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
+    .kpi-card .value { font-size: 1.5rem; font-weight: 700; color: #1e3a5f; margin-top: .2rem; }
+
+    /* ── Performance cards ── */
+    .perf-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 1rem;
+      margin-bottom: .9rem;
+    }
+    .perf-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .perf-card .step  { font-size: .75rem; color: #64748b; text-transform: capitalize; }
+    .perf-card .secs  { font-size: 1.4rem; font-weight: 700; color: #2563eb; margin: .2rem 0 .1rem; }
+    .perf-card .ram   { font-size: .72rem; color: #94a3b8; }
+
+    .sys-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem 2rem;
+      background: #fff;
+      border-radius: 10px;
+      padding: .85rem 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      font-size: .8rem;
+      color: #475569;
+    }
+    .sys-row b { color: #1e293b; }
+
+    /* ── Chart grid ── */
+    .chart-row   { display: grid; gap: 1.1rem; margin-bottom: 1.1rem; }
+    .col-2       { grid-template-columns: 1fr 1fr; }
+    .col-1       { grid-template-columns: 1fr; }
+    .col-3       { grid-template-columns: 1fr 1fr 1fr; }
+
+    .chart-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .chart-card h3 {
+      font-size: .82rem;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: .5rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .plot { width: 100%; height: 300px; }
+
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      font-size: .72rem;
+      color: #94a3b8;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 900px) {
+      .col-2, .col-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span>📊</span>
+  <h1>{{ title }}</h1>
+</header>
+
+<div class="container">
+
+  <!-- KPIs -->
+  <p class="section-label">Overview</p>
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="label">Total Rows</div><div class="value">{{ row_count }}</div></div>
+    <div class="kpi-card"><div class="label">Total Amount</div><div class="value">{{ total_amt }}</div></div>
+    <div class="kpi-card"><div class="label">Avg Transaction</div><div class="value">{{ avg_amt }}</div></div>
+    <div class="kpi-card"><div class="label">Flagged Txns</div><div class="value">{{ flagged }}</div></div>
+    <div class="kpi-card"><div class="label">Unique Accounts</div><div class="value">{{ unique_acc }}</div></div>
+  </div>
+
+  <!-- Performance -->
+  <p class="section-label">⚡ Pipeline Performance</p>
+  <div class="perf-row">
+    {% for step, vals in perf_steps.items() %}
+    <div class="perf-card">
+      <div class="step">{{ step.replace('_', ' ') }}</div>
+      <div class="secs">{{ "%.2f" | format(vals.duration_seconds) }}s</div>
+      <div class="ram">RAM {{ "%+.1f" | format(vals.ram_delta_mb) }} MB</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if sys_info %}
+  <div class="sys-row">
+    <span><b>OS:</b> {{ sys_info.os }}</span>
+    <span><b>Python:</b> {{ sys_info.python }}</span>
+    <span><b>CPU cores:</b> {{ sys_info.cpu_cores }}</span>
+    <span><b>RAM:</b> {{ sys_info.ram_gb }} GB</span>
+  </div>
+  {% endif %}
+
+  <!-- Charts row 1 -->
+  <p class="section-label">Transaction Data</p>
+  <div class="chart-row col-2">
+    <div class="chart-card">
+      <h3>Volume by Transaction Type</h3>
+      <div id="c-type" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Channel Distribution</h3>
+      <div id="c-channel" class="plot"></div>
+    </div>
+  </div>
+
+  <!-- Charts row 2 -->
+  <div class="chart-row col-1">
+    <div class="chart-card">
+      <h3>Daily Volume — Last 90 Days</h3>
+      <div id="c-daily" class="plot" style="height:260px;"></div>
+    </div>
+  </div>
+
+  <!-- Charts row 3 -->
+  <div class="chart-row col-3">
+    <div class="chart-card">
+      <h3>Status Breakdown</h3>
+      <div id="c-status" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Currency Split</h3>
+      <div id="c-currency" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Flagged vs Normal</h3>
+      <div id="c-flagged" class="plot"></div>
+    </div>
+  </div>
+
+  <!-- Charts row 4 -->
+  <div class="chart-row col-1">
+    <div class="chart-card">
+      <h3>Avg Amount by Merchant Category</h3>
+      <div id="c-merchant" class="plot" style="height:280px;"></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>POC — Python · Flask · PyArrow · Pandas · Plotly (fully offline)</footer>
+
+<script>
+  const cfg = { responsive: true, displayModeBar: false };
+  function plot(id, data) { Plotly.newPlot(id, data.data, data.layout, cfg); }
+
+  plot('c-type',     {{ fig_type     | safe }});
+  plot('c-channel',  {{ fig_channel  | safe }});
+  plot('c-daily',    {{ fig_daily    | safe }});
+  plot('c-status',   {{ fig_status   | safe }});
+  plot('c-currency', {{ fig_currency | safe }});
+  plot('c-flagged',  {{ fig_flagged  | safe }});
+  plot('c-merchant', {{ fig_merchant | safe }});
+</script>
+
+</body>
+</html>
+EOF
