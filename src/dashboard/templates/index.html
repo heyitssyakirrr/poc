@@ -207,21 +207,39 @@
 
 </div>
 
-<footer>POC — Python · Flask · PyArrow · Pandas · Plotly (fully offline)</footer>
+<footer>POC</footer>
+
+{% raw %}
+<!--
+  Chart data is embedded as JSON (type="application/json") so VS Code's JS linter
+  does not try to parse Jinja2 {{ }} expressions as JavaScript.
+  The plain <script> block below reads them cleanly with JSON.parse().
+-->
+{% endraw %}
+<script type="application/json" id="d-type">{{ fig_type | safe }}</script>
+<script type="application/json" id="d-channel">{{ fig_channel | safe }}</script>
+<script type="application/json" id="d-daily">{{ fig_daily | safe }}</script>
+<script type="application/json" id="d-status">{{ fig_status | safe }}</script>
+<script type="application/json" id="d-currency">{{ fig_currency | safe }}</script>
+<script type="application/json" id="d-flagged">{{ fig_flagged | safe }}</script>
+<script type="application/json" id="d-merchant">{{ fig_merchant | safe }}</script>
 
 <script>
   const cfg = { responsive: true, displayModeBar: false };
-  function plot(id, data) { Plotly.newPlot(id, data.data, data.layout, cfg); }
 
-  plot('c-type',     {{ fig_type     | safe }});
-  plot('c-channel',  {{ fig_channel  | safe }});
-  plot('c-daily',    {{ fig_daily    | safe }});
-  plot('c-status',   {{ fig_status   | safe }});
-  plot('c-currency', {{ fig_currency | safe }});
-  plot('c-flagged',  {{ fig_flagged  | safe }});
-  plot('c-merchant', {{ fig_merchant | safe }});
+  function plot(chartId, dataId) {
+    const data = JSON.parse(document.getElementById(dataId).textContent);
+    Plotly.newPlot(chartId, data.data, data.layout, cfg);
+  }
+
+  plot('c-type',     'd-type');
+  plot('c-channel',  'd-channel');
+  plot('c-daily',    'd-daily');
+  plot('c-status',   'd-status');
+  plot('c-currency', 'd-currency');
+  plot('c-flagged',  'd-flagged');
+  plot('c-merchant', 'd-merchant');
 </script>
 
 </body>
 </html>
-EOF

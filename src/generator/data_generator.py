@@ -92,10 +92,10 @@ def generate_parquet() -> None:
                         PARQUET_FILE,
                         schema=SCHEMA,
                         compression=PARQUET_COMPRESSION,
-                        row_group_size=PARQUET_ROW_GROUP_SIZE,
+                        # row_group_size=PARQUET_ROW_GROUP_SIZE,
                     )
 
-                writer.write_table(table)
+                writer.write_table(table, row_group_size=PARQUET_ROW_GROUP_SIZE)
                 rows_written += CHUNK_SIZE
 
                 if (i + 1) % 10 == 0:
@@ -103,7 +103,7 @@ def generate_parquet() -> None:
                     logger.info(f"  Progress: {rows_written:,} / {TOTAL_ROWS:,} rows ({pct:.0f}%)")
 
             if remainder:
-                writer.write_table(_make_chunk(fake, rng, remainder))
+                writer.write_table(_make_chunk(fake, rng, remainder), row_group_size=PARQUET_ROW_GROUP_SIZE)
                 rows_written += remainder
 
         finally:

@@ -24,6 +24,7 @@ def timer(label: str, store: bool = True):
     """
     process    = psutil.Process()
     mem_before = process.memory_info().rss / 1024 ** 2  # MB
+    cpu_before = process.cpu_percent(interval=None)  # prime the counter
 
     logger.info(f"[START] {label}")
     t0 = time.perf_counter()
@@ -33,13 +34,15 @@ def timer(label: str, store: bool = True):
     elapsed   = time.perf_counter() - t0
     mem_after = process.memory_info().rss / 1024 ** 2
     mem_delta = mem_after - mem_before
+    cpu_usage = process.cpu_percent(interval=None) # % since last call
 
-    logger.info(f"[END]   {label} — {elapsed:.2f}s | RAM delta: {mem_delta:+.1f} MB")
+    logger.info(f"[END]   {label} — {elapsed:.2f}s | RAM delta: {mem_delta:+.1f} MB | CPU: {cpu_usage:.1f}%")
 
     if store:
         _metrics[label] = {
             "duration_seconds": round(elapsed, 4),
             "ram_delta_mb":     round(mem_delta, 2),
+            "cpu_percent":      round(cpu_usage, 1),
         }
 
 

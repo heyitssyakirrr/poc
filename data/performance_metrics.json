@@ -1,0 +1,24 @@
+{
+  "generate_and_write_parquet": {
+    "duration_seconds": 632.9961,
+    "ram_delta_mb": 212.38,
+    "cpu_percent": 95.9
+  },
+  "read_parquet": {
+    "duration_seconds": 10.1933,
+    "ram_delta_mb": 1855.18,
+    "cpu_percent": 142.2
+  },
+  "aggregate_summaries": {
+    "duration_seconds": 5.2522,
+    "ram_delta_mb": 3.0,
+    "cpu_percent": 95.2
+  },
+  "system": {
+    "os": "Windows 11",
+    "python": "3.12.8",
+    "cpu_cores": 12,
+    "ram_gb": 15.6,
+    "ram_avail_gb": 3.1
+  }
+}

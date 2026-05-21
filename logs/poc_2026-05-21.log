@@ -1,0 +1,28 @@
+2026-05-21 09:22:19 | INFO     | __main__:38 — ── System Info ──────────────────────────────────────────────
+2026-05-21 09:22:19 | INFO     | __main__:40 —   os              : Windows 11
+2026-05-21 09:22:19 | INFO     | __main__:40 —   python          : 3.12.8
+2026-05-21 09:22:19 | INFO     | __main__:40 —   cpu_cores       : 12
+2026-05-21 09:22:19 | INFO     | __main__:40 —   ram_gb          : 15.6
+2026-05-21 09:22:19 | INFO     | __main__:40 —   ram_avail_gb    : 3.1
+2026-05-21 09:22:19 | INFO     | __main__:41 — ────────────────────────────────────────────────────────────
+2026-05-21 09:22:19 | INFO     | __main__:48 — STEP 1 — Generate 5M rows → Parquet
+2026-05-21 09:22:19 | INFO     | src.timer:29 — [START] generate_and_write_parquet
+2026-05-21 09:32:52 | INFO     | src.generator.data_generator:103 —   Progress: 5,000,000 / 5,000,000 rows (100%)
+2026-05-21 09:32:52 | INFO     | src.timer:39 — [END]   generate_and_write_parquet — 633.00s | RAM delta: +212.4 MB | CPU: 95.9%
+2026-05-21 09:32:52 | SUCCESS  | src.generator.data_generator:114 — Parquet written → transactions.parquet | 381.9 MB | 5,000,000 rows
+2026-05-21 09:32:52 | INFO     | __main__:56 — STEP 2 — Read Parquet
+2026-05-21 09:32:52 | INFO     | src.timer:29 — [START] read_parquet
+2026-05-21 09:33:02 | INFO     | src.timer:39 — [END]   read_parquet — 10.19s | RAM delta: +1855.2 MB | CPU: 142.2%
+2026-05-21 09:33:02 | INFO     | src.reader.parquet_reader:21 — Loaded 5,000,000 rows × 12 columns
+2026-05-21 09:33:02 | INFO     | __main__:58 — STEP 3 — Aggregate summaries
+2026-05-21 09:33:02 | INFO     | src.timer:29 — [START] aggregate_summaries
+2026-05-21 09:33:08 | INFO     | src.timer:39 — [END]   aggregate_summaries — 5.25s | RAM delta: +3.0 MB | CPU: 95.2%
+2026-05-21 09:33:08 | SUCCESS  | src.reader.parquet_reader:82 — Aggregations complete — 7 summaries built.
+2026-05-21 09:33:08 | INFO     | src.timer:55 — Metrics saved → C:\Public Bank\poc\data\performance_metrics.json
+2026-05-21 09:33:08 | SUCCESS  | __main__:85 — ────────────────────────────────────────────────────────────
+2026-05-21 09:33:08 | SUCCESS  | __main__:86 — PIPELINE COMPLETE
+2026-05-21 09:33:08 | SUCCESS  | __main__:89 —   generate_and_write_parquet                 633.00s
+2026-05-21 09:33:08 | SUCCESS  | __main__:89 —   read_parquet                               10.19s
+2026-05-21 09:33:08 | SUCCESS  | __main__:89 —   aggregate_summaries                        5.25s
+2026-05-21 09:33:08 | SUCCESS  | __main__:90 — ────────────────────────────────────────────────────────────
+2026-05-21 09:33:08 | INFO     | __main__:91 — Next: python src/dashboard/app.py

@@ -32,6 +32,7 @@ def _system_info() -> dict:
         "os":        f"{platform.system()} {platform.release()}",
         "python":    platform.python_version(),
         "cpu_cores": psutil.cpu_count(logical=True),
+        "cpu_freq_mhz": round(psutil.cpu_freq().current, 0) if psutil.cpu_freq() else "N/A",
         "ram_gb":    round(mem.total / 1024 ** 3, 1),
         "ram_avail_gb": round(mem.available / 1024 ** 3, 1),
     }
