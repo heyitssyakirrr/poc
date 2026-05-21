@@ -143,11 +143,21 @@
   <p class="section-label">⚡ Pipeline Performance</p>
   <div class="perf-row">
     {% for step, vals in perf_steps.items() %}
-    <div class="perf-card">
-      <div class="step">{{ step.replace('_', ' ') }}</div>
-      <div class="secs">{{ "%.2f" | format(vals.duration_seconds) }}s</div>
-      <div class="ram">RAM {{ "%+.1f" | format(vals.ram_delta_mb) }} MB</div>
-    </div>
+      <div class="perf-card">
+        <div class="step">{{ step.replace('_', ' ') }}</div>
+        <div class="secs">{{ "%.2f" | format(vals.duration_seconds) }}s</div>
+        <div class="ram">
+          RAM:
+          {% if vals.ram_delta_mb >= 1000 %}
+            {{ "%.1f" | format(vals.ram_delta_mb / 1024) }} GB
+          {% else %}
+            {{ "%.1f" | format(vals.ram_delta_mb) }} MB
+          {% endif %}
+        </div>
+        {% if vals.cpu_percent is defined %}
+        <div class="ram">CPU: {{ "%.1f" | format(vals.cpu_percent) }}%</div>
+        {% endif %}
+      </div>
     {% endfor %}
   </div>
 

@@ -1,4 +1,18 @@
-.venv
-venv/**/*
+# Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Virtual environment
+venv/
+.venv/
+
+# Generated at runtime — do not copy
+src/dashboard/static/js/plotly.min.js
+data/transactions.parquet
+data/performance_metrics.json
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

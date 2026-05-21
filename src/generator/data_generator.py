@@ -23,6 +23,7 @@ STATUSES          = ["SUCCESS", "FAILED", "PENDING", "REVERSED"]
 MERCHANT_CATS     = ["RETAIL", "FOOD", "TRAVEL", "UTILITIES", "HEALTHCARE", "EDUCATION", "ENTERTAINMENT"]
 
 # Explicit PyArrow schema — enforces types on every chunk, catches drift early
+# Add more columns here after that and update _make_chunk() below accordingly
 SCHEMA = pa.schema([
     pa.field("transaction_id",    pa.string()),
     pa.field("account_id",        pa.string()),

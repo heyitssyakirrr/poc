@@ -77,8 +77,8 @@ def index():
         avg_amt     = f"RM {_cache['avg_amt']:,.2f}",
         flagged     = f"{_cache['flagged']:,}",
         unique_acc  = f"{_cache['unique_acc']:,}",
-        perf_steps  = perf_steps,
         sys_info    = metrics.get("system", {}),
+        perf_steps = perf_steps,
         # charts
         fig_type      = _fig_json(chart_by_type(S["by_type"])),
         fig_channel   = _fig_json(chart_by_channel(S["by_channel"])),
