@@ -1,6 +1,7 @@
 # src/generator/data_generator.py
 # Generates TOTAL_ROWS of realistic banking transactions in CHUNK_SIZE batches
 # and streams them into a single Parquet file — RAM stays bounded at ~CHUNK_SIZE rows.
+# After writing, throughput metrics (rows/s, MB/s, file size) are added to the timer entry.
 
 import random
 import pandas as pd
@@ -13,7 +14,7 @@ from config.settings import (
     TOTAL_ROWS, CHUNK_SIZE, RANDOM_SEED,
     PARQUET_FILE, PARQUET_COMPRESSION, PARQUET_ROW_GROUP_SIZE,
 )
-from src.timer import timer
+from src.timer import timer, _metrics
 
 # ── Domain constants ───────────────────────────────────────────────────────────
 TRANSACTION_TYPES = ["CREDIT", "DEBIT", "TRANSFER", "WITHDRAWAL", "DEPOSIT"]
@@ -22,8 +23,6 @@ CURRENCIES        = ["MYR", "USD", "SGD", "EUR"]
 STATUSES          = ["SUCCESS", "FAILED", "PENDING", "REVERSED"]
 MERCHANT_CATS     = ["RETAIL", "FOOD", "TRAVEL", "UTILITIES", "HEALTHCARE", "EDUCATION", "ENTERTAINMENT"]
 
-# Explicit PyArrow schema — enforces types on every chunk, catches drift early
-# Add more columns here after that and update _make_chunk() below accordingly
 SCHEMA = pa.schema([
     pa.field("transaction_id",    pa.string()),
     pa.field("account_id",        pa.string()),
@@ -41,8 +40,6 @@ SCHEMA = pa.schema([
 
 
 def _make_chunk(fake: Faker, rng: random.Random, size: int) -> pa.Table:
-    """Build one Arrow table of `size` rows. Returns pa.Table (not DataFrame)
-    so we skip the pandas→arrow conversion cost on every chunk."""
     return pa.table(
         {
             "transaction_id":    [fake.uuid4()                                          for _ in range(size)],
@@ -71,6 +68,7 @@ def generate_parquet() -> None:
     """
     Stream-write TOTAL_ROWS rows to PARQUET_FILE in CHUNK_SIZE batches.
     Peak RAM is proportional to CHUNK_SIZE, not TOTAL_ROWS.
+    Throughput metrics are patched into the timer entry after writing.
     """
     PARQUET_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -93,7 +91,6 @@ def generate_parquet() -> None:
                         PARQUET_FILE,
                         schema=SCHEMA,
                         compression=PARQUET_COMPRESSION,
-                        # row_group_size=PARQUET_ROW_GROUP_SIZE,
                     )
 
                 writer.write_table(table, row_group_size=PARQUET_ROW_GROUP_SIZE)
@@ -111,5 +108,19 @@ def generate_parquet() -> None:
             if writer:
                 writer.close()
 
-    size_mb = PARQUET_FILE.stat().st_size / 1024 ** 2
-    logger.success(f"Parquet written → {PARQUET_FILE.name} | {size_mb:.1f} MB | {rows_written:,} rows")
+    # ── Patch throughput into the timer entry ─────────────────────────────────
+    size_mb  = PARQUET_FILE.stat().st_size / 1024 ** 2
+    duration = _metrics["generate_and_write_parquet"]["duration_seconds"]
+
+    _metrics["generate_and_write_parquet"].update({
+        "rows_written":       rows_written,
+        "parquet_size_mb":    round(size_mb, 2),
+        "rows_per_second":    round(rows_written / duration, 0),
+        "mb_per_second":      round(size_mb     / duration, 2),
+    })
+
+    logger.success(
+        f"Parquet written → {PARQUET_FILE.name} | "
+        f"{size_mb:.1f} MB | {rows_written:,} rows | "
+        f"{_metrics['generate_and_write_parquet']['rows_per_second']:,.0f} rows/s"
+    )

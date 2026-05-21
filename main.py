@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # main.py
-# Pipeline entry point — generate → read → aggregate → save metrics.
+# Single entry point — generate → read → save metrics → launch dashboard.
 #
 # Usage:
-#   python main.py              full pipeline
-#   python main.py --generate   generate Parquet only
-#   python main.py --read       read + aggregate only (Parquet must exist)
+#   python main.py              full pipeline then open dashboard
+#   python main.py --generate   generate Parquet only (no dashboard)
+#   python main.py --read       read only, then open dashboard
+#   python main.py --dashboard  launch dashboard only (metrics must exist)
 
 import sys
 import argparse
@@ -18,9 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import src.logger  # noqa: F401 — configure loguru as side-effect
 from loguru import logger
 
-from config.settings import PARQUET_FILE
+from config.settings import PARQUET_FILE, DASHBOARD_HOST, DASHBOARD_PORT, DASHBOARD_DEBUG
 from src.generator import generate_parquet
-from src.reader    import read_parquet, summarise
+from src.reader    import read_parquet
 from src.timer     import save_metrics, get_metrics
 
 
@@ -29,11 +30,11 @@ from src.timer     import save_metrics, get_metrics
 def _system_info() -> dict:
     mem = psutil.virtual_memory()
     info = {
-        "os":        f"{platform.system()} {platform.release()}",
-        "python":    platform.python_version(),
-        "cpu_cores": psutil.cpu_count(logical=True),
+        "os":           f"{platform.system()} {platform.release()}",
+        "python":       platform.python_version(),
+        "cpu_cores":    psutil.cpu_count(logical=True),
         "cpu_freq_mhz": round(psutil.cpu_freq().current, 0) if psutil.cpu_freq() else "N/A",
-        "ram_gb":    round(mem.total / 1024 ** 3, 1),
+        "ram_gb":       round(mem.total / 1024 ** 3, 1),
         "ram_avail_gb": round(mem.available / 1024 ** 3, 1),
     }
     logger.info("── System Info " + "─" * 46)
@@ -55,23 +56,44 @@ def step_read() -> None:
         logger.error(f"Parquet not found: {PARQUET_FILE}  →  run --generate first.")
         sys.exit(1)
     logger.info("STEP 2 — Read Parquet")
-    df = read_parquet()
-    logger.info("STEP 3 — Aggregate summaries")
-    summarise(df)
+    read_parquet()
+
+
+def step_dashboard() -> None:
+    """Launch the FastAPI dashboard (blocking — call last)."""
+    import uvicorn
+    from src.dashboard.assets import ensure_plotly_js
+
+    ensure_plotly_js()
+    logger.success("─" * 60)
+    logger.success(f"Dashboard → http://localhost:{DASHBOARD_PORT}")
+    logger.success("─" * 60)
+
+    uvicorn.run(
+        "src.dashboard.app:app",
+        host=DASHBOARD_HOST,
+        port=DASHBOARD_PORT,
+        reload=DASHBOARD_DEBUG,
+    )
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="POC — 5M Parquet Pipeline")
-    p.add_argument("--generate", action="store_true", help="Generate Parquet only")
-    p.add_argument("--read",     action="store_true", help="Read + aggregate only")
+    p.add_argument("--generate",  action="store_true", help="Generate Parquet only (skips dashboard)")
+    p.add_argument("--read",      action="store_true", help="Read only, then open dashboard")
+    p.add_argument("--dashboard", action="store_true", help="Launch dashboard only (metrics must exist)")
     return p.parse_args()
 
 
 def main() -> None:
     args     = _parse_args()
     sys_info = _system_info()
+
+    if args.dashboard:
+        step_dashboard()
+        return
 
     if args.generate:
         step_generate()
@@ -87,9 +109,16 @@ def main() -> None:
     logger.success("PIPELINE COMPLETE")
     for step, vals in get_metrics().items():
         if isinstance(vals, dict) and "duration_seconds" in vals:
-            logger.success(f"  {step:<42} {vals['duration_seconds']:.2f}s")
+            logger.success(
+                f"  {step:<42} "
+                f"{vals['duration_seconds']:.2f}s  |  "
+                f"peak RAM {vals.get('ram_peak_mb', 0):.0f} MB  |  "
+                f"CPU {vals.get('cpu_percent', 0):.1f}%"
+            )
     logger.success("─" * 60)
-    logger.info("Next: python src/dashboard/app.py")
+
+    if not args.generate:
+        step_dashboard()
 
 
 if __name__ == "__main__":

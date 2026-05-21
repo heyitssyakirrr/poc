@@ -1,86 +1,42 @@
 # src/reader/parquet_reader.py
-# Reads the Parquet file and produces pre-aggregated summaries.
-# The dashboard reads from these summaries — never re-scans 5M rows per request.
+# Reads the Parquet file and measures read performance.
+# No aggregations — this project measures pipeline performance, not data content.
+# Throughput metrics (rows/s, MB/s) are patched into the timer entry after reading.
 
 import json
 import pandas as pd
-import pyarrow.parquet as pq
 from loguru import logger
 
 from config.settings import PARQUET_FILE, METRICS_FILE
-from src.timer import timer
+from src.timer import timer, _metrics
 
 
 def read_parquet(columns: list[str] | None = None) -> pd.DataFrame:
     """
-    Load the Parquet file into a DataFrame.
+    Load the Parquet file into a DataFrame and record throughput metrics.
     Pass `columns` for column pruning — faster reads, lower RAM.
     """
     with timer("read_parquet"):
         df = pd.read_parquet(PARQUET_FILE, columns=columns)
-    logger.info(f"Loaded {len(df):,} rows × {df.shape[1]} columns")
+
+    # ── Patch throughput into the timer entry ─────────────────────────────────
+    size_mb  = PARQUET_FILE.stat().st_size / 1024 ** 2
+    duration = _metrics["read_parquet"]["duration_seconds"]
+    row_count = len(df)
+
+    _metrics["read_parquet"].update({
+        "rows_read":       row_count,
+        "parquet_size_mb": round(size_mb, 2),
+        "rows_per_second": round(row_count / duration, 0),
+        "mb_per_second":   round(size_mb   / duration, 2),
+    })
+
+    logger.info(
+        f"Loaded {row_count:,} rows × {df.shape[1]} columns | "
+        f"{size_mb:.1f} MB | "
+        f"{_metrics['read_parquet']['rows_per_second']:,.0f} rows/s"
+    )
     return df
-
-
-def summarise(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """
-    Run all aggregations once. Returns a dict of small summary DataFrames.
-    Add new aggregations here; the dashboard just reads the dict key.
-    """
-    with timer("aggregate_summaries"):
-        summaries = {
-
-            "by_type": (
-                df.groupby("transaction_type")
-                  .agg(count=("transaction_id", "count"), total_amount=("amount", "sum"))
-                  .reset_index()
-            ),
-
-            "by_channel": (
-                df.groupby("channel")
-                  .agg(count=("transaction_id", "count"))
-                  .reset_index()
-                  .sort_values("count", ascending=False)
-            ),
-
-            # Tail 90 days keeps the line chart readable
-            "daily_volume": (
-                df.assign(date=df["timestamp"].dt.date)
-                  .groupby("date")
-                  .agg(count=("transaction_id", "count"), total_amount=("amount", "sum"))
-                  .reset_index()
-                  .sort_values("date")
-                  .tail(90)
-            ),
-
-            "by_status": (
-                df.groupby("status")
-                  .agg(count=("transaction_id", "count"))
-                  .reset_index()
-            ),
-
-            "flagged": (
-                df.groupby("is_flagged")
-                  .agg(count=("transaction_id", "count"), total_amount=("amount", "sum"))
-                  .reset_index()
-            ),
-
-            "by_merchant": (
-                df.groupby("merchant_category")
-                  .agg(avg_amount=("amount", "mean"), count=("transaction_id", "count"))
-                  .reset_index()
-                  .sort_values("avg_amount", ascending=False)
-            ),
-
-            "by_currency": (
-                df.groupby("currency")
-                  .agg(count=("transaction_id", "count"), total_amount=("amount", "sum"))
-                  .reset_index()
-            ),
-        }
-
-    logger.success(f"Aggregations complete — {len(summaries)} summaries built.")
-    return summaries
 
 
 def load_metrics() -> dict:

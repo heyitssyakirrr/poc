@@ -4,251 +4,369 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{ title }}</title>
-  <!-- Plotly served from local static — zero CDN calls -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="/static/js/plotly.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --bg:          #f1f5f9;
+      --surface:     #ffffff;
+      --surface-2:   #f8fafc;
+      --border:      rgba(0,0,0,0.07);
+      --text:        #1e293b;
+      --text-muted:  #64748b;
+      --blue:        #2563EB;
+      --blue-light:  #2563EB;
+      --amber:       #F59E0B;
+      --amber-light: #d97706;
+      --green:       #10B981;
+      --accent-line: rgba(37,99,235,0.4);
+    }
+
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #f1f5f9;
-      color: #1e293b;
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
     }
 
     /* ── Header ── */
     header {
-      background: #1e3a5f;
-      color: #fff;
-      padding: 1.1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
       display: flex;
       align-items: center;
-      gap: .75rem;
+      gap: 1rem;
+      background: var(--surface);
     }
-    header h1 { font-size: 1.2rem; font-weight: 600; }
+    header .badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .7rem;
+      background: var(--blue);
+      color: #fff;
+      padding: .2rem .6rem;
+      border-radius: 4px;
+      letter-spacing: .05em;
+    }
+    header h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: .01em;
+    }
 
-    .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem 2rem; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
 
     /* ── Section label ── */
     .section-label {
-      font-size: .8rem;
-      font-weight: 700;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .72rem;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .08em;
-      color: #2563eb;
-      border-left: 3px solid #2563eb;
-      padding-left: .6rem;
-      margin: 1.8rem 0 .9rem;
+      letter-spacing: .1em;
+      color: var(--blue-light);
+      margin: 2rem 0 1rem;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
     }
 
-    /* ── KPI cards ── */
-    .kpi-row {
+    /* ── Throughput KPI cards ── */
+    .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 1rem;
     }
     .kpi-card {
-      background: #fff;
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.1rem 1.3rem;
+      position: relative;
+      overflow: hidden;
     }
-    .kpi-card .label { font-size: .72rem; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
-    .kpi-card .value { font-size: 1.5rem; font-weight: 700; color: #1e3a5f; margin-top: .2rem; }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--blue);
+    }
+    .kpi-card.amber::before { background: var(--amber); }
+    .kpi-card.green::before { background: var(--green); }
 
-    /* ── Performance cards ── */
-    .perf-row {
+    .kpi-card .label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: .4rem;
+    }
+    .kpi-card .value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1.45rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .kpi-card .sub {
+      font-size: .72rem;
+      color: var(--text-muted);
+      margin-top: .3rem;
+    }
+
+    /* ── Performance step cards ── */
+    .step-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 1rem;
+    }
+    .step-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem 1.4rem;
+    }
+    .step-card .step-name {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .78rem;
+      color: var(--blue-light);
+      text-transform: uppercase;
+      letter-spacing: .06em;
       margin-bottom: .9rem;
+      padding-bottom: .6rem;
+      border-bottom: 1px solid var(--border);
     }
-    .perf-card {
-      background: #fff;
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08);
-    }
-    .perf-card .step  { font-size: .75rem; color: #64748b; text-transform: capitalize; }
-    .perf-card .secs  { font-size: 1.4rem; font-weight: 700; color: #2563eb; margin: .2rem 0 .1rem; }
-    .perf-card .ram   { font-size: .72rem; color: #94a3b8; }
-
-    .sys-row {
+    .step-card .metric-row {
       display: flex;
-      flex-wrap: wrap;
-      gap: .4rem 2rem;
-      background: #fff;
-      border-radius: 10px;
-      padding: .85rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08);
-      font-size: .8rem;
-      color: #475569;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: .3rem 0;
     }
-    .sys-row b { color: #1e293b; }
+    .step-card .metric-row + .metric-row {
+      border-top: 1px solid var(--border);
+    }
+    .step-card .metric-key {
+      font-size: .78rem;
+      color: var(--text-muted);
+    }
+    .step-card .metric-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .step-card .metric-val.highlight { color: var(--blue-light); }
+    .step-card .metric-val.amber     { color: var(--amber-light); }
 
-    /* ── Chart grid ── */
-    .chart-row   { display: grid; gap: 1.1rem; margin-bottom: 1.1rem; }
-    .col-2       { grid-template-columns: 1fr 1fr; }
-    .col-1       { grid-template-columns: 1fr; }
-    .col-3       { grid-template-columns: 1fr 1fr 1fr; }
-
+    /* ── Chart cards ── */
+    .chart-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      margin-bottom: 1.2rem;
+    }
+    .chart-grid-1 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.2rem;
+      margin-bottom: 1.2rem;
+    }
     .chart-card {
-      background: #fff;
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem 1.4rem;
     }
     .chart-card h3 {
-      font-size: .82rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .75rem;
       font-weight: 600;
-      color: #334155;
-      margin-bottom: .5rem;
+      color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: .04em;
+      letter-spacing: .08em;
+      margin-bottom: .75rem;
     }
     .plot { width: 100%; height: 300px; }
+    .plot-wide { width: 100%; height: 220px; }
 
     footer {
       text-align: center;
-      padding: 1.5rem;
-      font-size: .72rem;
-      color: #94a3b8;
-      margin-top: 1rem;
+      padding: 2rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .68rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
     }
 
     @media (max-width: 900px) {
-      .col-2, .col-3 { grid-template-columns: 1fr; }
+      .chart-grid-2 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
 <header>
-  <span>📊</span>
+  <span class="badge">POC</span>
   <h1>{{ title }}</h1>
 </header>
 
 <div class="container">
 
-  <!-- KPIs -->
-  <p class="section-label">Overview</p>
-  <div class="kpi-row">
-    <div class="kpi-card"><div class="label">Total Rows</div><div class="value">{{ row_count }}</div></div>
-    <div class="kpi-card"><div class="label">Total Amount</div><div class="value">{{ total_amt }}</div></div>
-    <div class="kpi-card"><div class="label">Avg Transaction</div><div class="value">{{ avg_amt }}</div></div>
-    <div class="kpi-card"><div class="label">Flagged Txns</div><div class="value">{{ flagged }}</div></div>
-    <div class="kpi-card"><div class="label">Unique Accounts</div><div class="value">{{ unique_acc }}</div></div>
+  {# ── Throughput KPIs ── #}
+  <p class="section-label">Throughput &amp; File</p>
+  <div class="kpi-grid">
+
+    {% if kpis.parquet_size_mb %}
+    <div class="kpi-card green">
+      <div class="label">Parquet Size</div>
+      <div class="value">{{ "%.1f"|format(kpis.parquet_size_mb) }} <span style="font-size:.9rem;color:var(--text-muted)">MB</span></div>
+    </div>
+    {% endif %}
+
+    {% if kpis.total_rows %}
+    <div class="kpi-card">
+      <div class="label">Total Rows</div>
+      <div class="value">{{ "{:,}".format(kpis.total_rows|int) }}</div>
+    </div>
+    {% endif %}
+
+    {% if kpis.write_rows_per_sec %}
+    <div class="kpi-card amber">
+      <div class="label">Write Speed</div>
+      <div class="value">{{ "{:,.0f}".format(kpis.write_rows_per_sec) }}</div>
+      <div class="sub">rows / second</div>
+    </div>
+    {% endif %}
+
+    {% if kpis.write_mb_per_sec %}
+    <div class="kpi-card amber">
+      <div class="label">Write Throughput</div>
+      <div class="value">{{ "%.1f"|format(kpis.write_mb_per_sec) }} <span style="font-size:.9rem;color:var(--text-muted)">MB/s</span></div>
+    </div>
+    {% endif %}
+
+    {% if kpis.read_rows_per_sec %}
+    <div class="kpi-card">
+      <div class="label">Read Speed</div>
+      <div class="value">{{ "{:,.0f}".format(kpis.read_rows_per_sec) }}</div>
+      <div class="sub">rows / second</div>
+    </div>
+    {% endif %}
+
+    {% if kpis.read_mb_per_sec %}
+    <div class="kpi-card">
+      <div class="label">Read Throughput</div>
+      <div class="value">{{ "%.1f"|format(kpis.read_mb_per_sec) }} <span style="font-size:.9rem;color:var(--text-muted)">MB/s</span></div>
+    </div>
+    {% endif %}
+
   </div>
 
-  <!-- Performance -->
-  <p class="section-label">⚡ Pipeline Performance</p>
-  <div class="perf-row">
+  {# ── Per-step breakdown cards ── #}
+  <p class="section-label">Step Breakdown</p>
+  <div class="step-grid">
     {% for step, vals in perf_steps.items() %}
-      <div class="perf-card">
-        <div class="step">{{ step.replace('_', ' ') }}</div>
-        <div class="secs">{{ "%.2f" | format(vals.duration_seconds) }}s</div>
-        <div class="ram">
-          RAM:
-          {% if vals.ram_delta_mb >= 1000 %}
-            {{ "%.1f" | format(vals.ram_delta_mb / 1024) }} GB
-          {% else %}
-            {{ "%.1f" | format(vals.ram_delta_mb) }} MB
-          {% endif %}
-        </div>
-        {% if vals.cpu_percent is defined %}
-        <div class="ram">CPU: {{ "%.1f" | format(vals.cpu_percent) }}%</div>
-        {% endif %}
+    <div class="step-card">
+      <div class="step-name">{{ step.replace('_', ' ') }}</div>
+
+      <div class="metric-row">
+        <span class="metric-key">Duration</span>
+        <span class="metric-val highlight">{{ "%.2f"|format(vals.duration_seconds) }}s</span>
       </div>
+
+      <div class="metric-row">
+        <span class="metric-key">RAM delta</span>
+        <span class="metric-val">{{ "%.1f"|format(vals.ram_delta_mb) }} MB</span>
+      </div>
+
+      <div class="metric-row">
+        <span class="metric-key">RAM peak</span>
+        <span class="metric-val amber">{{ "%.1f"|format(vals.ram_peak_mb) }} MB</span>
+      </div>
+
+      <div class="metric-row">
+        <span class="metric-key">Free RAM (min)</span>
+        <span class="metric-val">{{ "%.1f"|format(vals.ram_free_min_mb) }} MB</span>
+      </div>
+
+      <div class="metric-row">
+        <span class="metric-key">CPU avg</span>
+        <span class="metric-val">{{ "%.1f"|format(vals.cpu_avg_percent) }}%
+          <span style="font-weight:400;font-size:.8rem;color:var(--text-muted)">
+            (~{{ "%.1f"|format(vals.cpu_avg_percent / 100) }} / {{ vals.cpu_cores_total }} cores)
+          </span>
+        </span>
+      </div>
+
+      <div class="metric-row">
+        <span class="metric-key">CPU peak</span>
+        <span class="metric-val amber">{{ "%.1f"|format(vals.cpu_peak_percent) }}%</span>
+      </div>
+
+      {% if vals.rows_per_second is defined %}
+      <div class="metric-row">
+        <span class="metric-key">Throughput</span>
+        <span class="metric-val">{{ "{:,.0f}".format(vals.rows_per_second) }} rows/s</span>
+      </div>
+      {% endif %}
+
+    </div>
     {% endfor %}
   </div>
 
-  {% if sys_info %}
-  <div class="sys-row">
-    <span><b>OS:</b> {{ sys_info.os }}</span>
-    <span><b>Python:</b> {{ sys_info.python }}</span>
-    <span><b>CPU cores:</b> {{ sys_info.cpu_cores }}</span>
-    <span><b>RAM:</b> {{ sys_info.ram_gb }} GB</span>
-  </div>
-  {% endif %}
+  {# ── Charts ── #}
+  <p class="section-label">Resource Usage</p>
 
-  <!-- Charts row 1 -->
-  <p class="section-label">Transaction Data</p>
-  <div class="chart-row col-2">
+  <div class="chart-grid-2">
     <div class="chart-card">
-      <h3>Volume by Transaction Type</h3>
-      <div id="c-type" class="plot"></div>
+      <h3>CPU — Used vs Available ({{ cpu_cores_total }} cores × 100 = {{ cpu_cores_total * 100 }}% max)</h3>
+      <div id="c-cpu" class="plot"></div>
     </div>
     <div class="chart-card">
-      <h3>Channel Distribution</h3>
-      <div id="c-channel" class="plot"></div>
+      <h3>RAM — Peak Used vs Free (system total: {{ "%.1f"|format(kpis.parquet_size_mb) }} MB file)</h3>
+      <div id="c-ram" class="plot"></div>
     </div>
   </div>
 
-  <!-- Charts row 2 -->
-  <div class="chart-row col-1">
+  <p class="section-label">Pipeline Timeline</p>
+  <div class="chart-grid-1">
     <div class="chart-card">
-      <h3>Daily Volume — Last 90 Days</h3>
-      <div id="c-daily" class="plot" style="height:260px;"></div>
-    </div>
-  </div>
-
-  <!-- Charts row 3 -->
-  <div class="chart-row col-3">
-    <div class="chart-card">
-      <h3>Status Breakdown</h3>
-      <div id="c-status" class="plot"></div>
-    </div>
-    <div class="chart-card">
-      <h3>Currency Split</h3>
-      <div id="c-currency" class="plot"></div>
-    </div>
-    <div class="chart-card">
-      <h3>Flagged vs Normal</h3>
-      <div id="c-flagged" class="plot"></div>
-    </div>
-  </div>
-
-  <!-- Charts row 4 -->
-  <div class="chart-row col-1">
-    <div class="chart-card">
-      <h3>Avg Amount by Merchant Category</h3>
-      <div id="c-merchant" class="plot" style="height:280px;"></div>
+      <h3>Step Duration — Wall-clock Waterfall</h3>
+      <div id="c-waterfall" class="plot-wide"></div>
     </div>
   </div>
 
 </div>
 
-<footer>POC</footer>
+<footer>POC — Pipeline Performance Dashboard</footer>
 
-{% raw %}
-<!--
-  Chart data is embedded as JSON (type="application/json") so VS Code's JS linter
-  does not try to parse Jinja2 {{ }} expressions as JavaScript.
-  The plain <script> block below reads them cleanly with JSON.parse().
--->
-{% endraw %}
-<script type="application/json" id="d-type">{{ fig_type | safe }}</script>
-<script type="application/json" id="d-channel">{{ fig_channel | safe }}</script>
-<script type="application/json" id="d-daily">{{ fig_daily | safe }}</script>
-<script type="application/json" id="d-status">{{ fig_status | safe }}</script>
-<script type="application/json" id="d-currency">{{ fig_currency | safe }}</script>
-<script type="application/json" id="d-flagged">{{ fig_flagged | safe }}</script>
-<script type="application/json" id="d-merchant">{{ fig_merchant | safe }}</script>
+{# Embed chart data as JSON — avoids Jinja2/JS conflicts #}
+<script type="application/json" id="d-cpu">{{ fig_cpu | safe }}</script>
+<script type="application/json" id="d-ram">{{ fig_ram | safe }}</script>
+<script type="application/json" id="d-waterfall">{{ fig_waterfall | safe }}</script>
 
 <script>
   const cfg = { responsive: true, displayModeBar: false };
 
   function plot(chartId, dataId) {
-    const data = JSON.parse(document.getElementById(dataId).textContent);
-    Plotly.newPlot(chartId, data.data, data.layout, cfg);
+    const fig = JSON.parse(document.getElementById(dataId).textContent);
+    Plotly.newPlot(chartId, fig.data, fig.layout, cfg);
   }
 
-  plot('c-type',     'd-type');
-  plot('c-channel',  'd-channel');
-  plot('c-daily',    'd-daily');
-  plot('c-status',   'd-status');
-  plot('c-currency', 'd-currency');
-  plot('c-flagged',  'd-flagged');
-  plot('c-merchant', 'd-merchant');
+  plot('c-cpu',       'd-cpu');
+  plot('c-ram',       'd-ram');
+  plot('c-waterfall', 'd-waterfall');
 </script>
 
 </body>

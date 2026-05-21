@@ -1,24 +1,48 @@
 {
   "generate_and_write_parquet": {
-    "duration_seconds": 632.9961,
-    "ram_delta_mb": 212.38,
-    "cpu_percent": 95.9
+    "duration_seconds": 1267.7751,
+    "ram_before_mb": 91.84,
+    "ram_after_mb": 384.39,
+    "ram_delta_mb": 292.55,
+    "ram_peak_mb": 469.93,
+    "ram_free_before_mb": 3615.05,
+    "ram_free_after_mb": 4175.13,
+    "ram_free_min_mb": 2562.89,
+    "cpu_avg_percent": 20.1,
+    "cpu_peak_percent": 100.0,
+    "cpu_cores_total": 12,
+    "start_time": "2026-05-21T09:03:20.495027+00:00",
+    "end_time": "2026-05-21T09:24:28.271891+00:00",
+    "rows_written": 5000000,
+    "parquet_size_mb": 381.89,
+    "rows_per_second": 3944.0,
+    "mb_per_second": 0.3
   },
   "read_parquet": {
-    "duration_seconds": 10.1933,
-    "ram_delta_mb": 1855.18,
-    "cpu_percent": 142.2
-  },
-  "aggregate_summaries": {
-    "duration_seconds": 5.2522,
-    "ram_delta_mb": 3.0,
-    "cpu_percent": 95.2
+    "duration_seconds": 17.1365,
+    "ram_before_mb": 293.4,
+    "ram_after_mb": 2135.22,
+    "ram_delta_mb": 1841.82,
+    "ram_peak_mb": 2131.29,
+    "ram_free_before_mb": 4255.82,
+    "ram_free_after_mb": 3424.86,
+    "ram_free_min_mb": 3268.94,
+    "cpu_avg_percent": 83.8,
+    "cpu_peak_percent": 100.0,
+    "cpu_cores_total": 12,
+    "start_time": "2026-05-21T09:24:28.293041+00:00",
+    "end_time": "2026-05-21T09:24:45.430006+00:00",
+    "rows_read": 5000000,
+    "parquet_size_mb": 381.89,
+    "rows_per_second": 291775.0,
+    "mb_per_second": 22.29
   },
   "system": {
     "os": "Windows 11",
     "python": "3.12.8",
     "cpu_cores": 12,
+    "cpu_freq_mhz": 2000.0,
     "ram_gb": 15.6,
-    "ram_avail_gb": 3.1
+    "ram_avail_gb": 3.5
   }
 }
