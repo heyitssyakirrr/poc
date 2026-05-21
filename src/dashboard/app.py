@@ -1,6 +1,3 @@
-# src/dashboard/app.py
-# Flask dashboard — fully offline, Plotly JS served from pip package.
-#
 # Run:  python src/dashboard/app.py
 # Open: http://localhost:5000
 
@@ -10,7 +7,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import json
 import plotly
-from flask import Flask, render_template, jsonify
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from loguru import logger
 
 import src.logger  # noqa: F401 — configure loguru handlers
@@ -27,7 +27,14 @@ from src.dashboard.charts import (
 from src.reader import read_parquet, summarise, load_metrics
 
 # ── App factory ────────────────────────────────────────────────────────────────
-app = Flask(__name__)
+app = FastAPI()
+
+# ── Static files + templates ───────────────────────────────────────────────────
+STATIC_DIR    = Path(__file__).parent / "static"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # ── Module-level data cache — loaded once on first request ─────────────────────
 _cache: dict = {}
@@ -55,10 +62,14 @@ def _fig_json(fig) -> str:
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
-@app.route("/")
-def index():
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
     if not PARQUET_FILE.exists():
-        return render_template("error.html", title=DASHBOARD_TITLE)
+        return templates.TemplateResponse(
+            request=request,
+            name="error.html",
+            context={"title": DASHBOARD_TITLE},
+        )
 
     _load_cache()
     S       = _cache["summaries"]
@@ -69,31 +80,33 @@ def index():
         if isinstance(v, dict) and "duration_seconds" in v
     }
 
-    return render_template(
-        "index.html",
-        title       = DASHBOARD_TITLE,
-        row_count   = f"{_cache['row_count']:,}",
-        total_amt   = f"RM {_cache['total_amt']:,.2f}",
-        avg_amt     = f"RM {_cache['avg_amt']:,.2f}",
-        flagged     = f"{_cache['flagged']:,}",
-        unique_acc  = f"{_cache['unique_acc']:,}",
-        sys_info    = metrics.get("system", {}),
-        perf_steps = perf_steps,
-        # charts
-        fig_type      = _fig_json(chart_by_type(S["by_type"])),
-        fig_channel   = _fig_json(chart_by_channel(S["by_channel"])),
-        fig_daily     = _fig_json(chart_daily_volume(S["daily_volume"])),
-        fig_status    = _fig_json(chart_by_status(S["by_status"])),
-        fig_merchant  = _fig_json(chart_by_merchant(S["by_merchant"])),
-        fig_flagged   = _fig_json(chart_flagged(S["flagged"])),
-        fig_currency  = _fig_json(chart_by_currency(S["by_currency"])),
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "title":      DASHBOARD_TITLE,
+            "row_count":  f"{_cache['row_count']:,}",
+            "total_amt":  f"RM {_cache['total_amt']:,.2f}",
+            "avg_amt":    f"RM {_cache['avg_amt']:,.2f}",
+            "flagged":    f"{_cache['flagged']:,}",
+            "unique_acc": f"{_cache['unique_acc']:,}",
+            "perf_steps": perf_steps,
+            "sys_info":   metrics.get("system", {}),
+            "fig_type":     _fig_json(chart_by_type(S["by_type"])),
+            "fig_channel":  _fig_json(chart_by_channel(S["by_channel"])),
+            "fig_daily":    _fig_json(chart_daily_volume(S["daily_volume"])),
+            "fig_status":   _fig_json(chart_by_status(S["by_status"])),
+            "fig_merchant": _fig_json(chart_by_merchant(S["by_merchant"])),
+            "fig_flagged":  _fig_json(chart_flagged(S["flagged"])),
+            "fig_currency": _fig_json(chart_by_currency(S["by_currency"])),
+        },
     )
 
 
-@app.route("/health")
-def health():
+@app.get("/health")
+async def health():
     """Health-check endpoint — useful for server monitoring."""
-    return jsonify({
+    return JSONResponse({
         "status":         "ok",
         "parquet_exists": PARQUET_FILE.exists(),
         "cache_loaded":   bool(_cache),
@@ -102,6 +115,12 @@ def health():
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    import uvicorn
     ensure_plotly_js()   # copy JS from pip package to static folder (idempotent)
-    logger.info(f"Dashboard → http://{DASHBOARD_HOST}:{DASHBOARD_PORT}")
-    app.run(host=DASHBOARD_HOST, port=DASHBOARD_PORT, debug=DASHBOARD_DEBUG)
+    logger.info(f"Dashboard → http://localhost:{DASHBOARD_PORT}")
+    uvicorn.run(
+        "src.dashboard.app:app",
+        host=DASHBOARD_HOST,
+        port=DASHBOARD_PORT,
+        reload=DASHBOARD_DEBUG,
+    )
