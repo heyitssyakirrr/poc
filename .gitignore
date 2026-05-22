@@ -9,6 +9,7 @@ venv/
 
 # Generated at runtime — do not copy
 src/dashboard/static/js/plotly.min.js
+data/
 data/transactions.parquet
 data/performance_metrics.json
 logs/

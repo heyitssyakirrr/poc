@@ -1,12 +1,12 @@
 # src/dashboard/charts.py
 # Performance-focused Plotly charts.
 #
-#   chart_cpu(perf_steps)        — stacked bar: CPU used vs available per step.
+#   chart_cpu(perf_steps)        — stacked bar: CPU used (avg) vs available per step.
 #                                  Max bar height = cores × 100%.
-#                                  Annotated with estimated cores used.
-#   chart_ram(perf_steps)        — stacked bar: RAM used (peak) vs free (min)
-#                                  per step. Max bar height = total system RAM.
-#                                  Secondary Y axis shows % of system RAM.
+#                                  Peak shown as scatter diamond marker.
+#   chart_ram(perf_steps)        — stacked bar: RAM avg used vs remaining free
+#                                  per step. Every bar reaches total system RAM.
+#                                  Peak shown as scatter diamond marker.
 #   chart_waterfall(perf_steps)  — horizontal Gantt: each step placed
 #                                  sequentially on a wall-clock time axis.
 
@@ -44,7 +44,7 @@ def chart_cpu(perf_steps: dict) -> Figure:
       Bottom (blue)  = CPU avg % used   (system-wide, so can exceed 100%)
       Top    (light) = CPU % still free  = (cores × 100) - used
     Total bar always = cores × 100  → gives instant headroom context.
-    Annotated with estimated cores used = used% / 100.
+    Peak shown as scatter diamond marker.
     """
     labels    = _step_labels(perf_steps)
     used      = [v.get("cpu_avg_percent",  0) for v in perf_steps.values()]
@@ -54,7 +54,7 @@ def chart_cpu(perf_steps: dict) -> Figure:
 
     fig = go.Figure()
 
-    # Used CPU
+    # Used CPU (avg)
     fig.add_trace(go.Bar(
         name="CPU Used (avg %)",
         x=labels,
@@ -130,58 +130,64 @@ def chart_cpu(perf_steps: dict) -> Figure:
 def chart_ram(perf_steps: dict) -> Figure:
     """
     Stacked bar per step:
-      Bottom (amber) = RAM peak used by process (MB)
-      Top    (light) = minimum free RAM seen during step (MB)
-    Total bar ≈ total system RAM → gives instant pressure context.
-    Secondary Y axis shows % of total system RAM.
+      Bottom (amber) = RAM avg used by process during step (MB)
+      Top    (light) = remaining RAM headroom = total system RAM - avg used
+    Every bar reaches exactly _TOTAL_RAM_MB → consistent height, instant context.
+    Peak shown as scatter diamond marker (same pattern as CPU chart).
     """
-    labels    = _step_labels(perf_steps)
-    peak_mb   = [v.get("ram_peak_mb",    0) for v in perf_steps.values()]
-    free_min  = [v.get("ram_free_min_mb",0) for v in perf_steps.values()]
+    labels  = _step_labels(perf_steps)
+    avg_mb  = [v.get("ram_avg_mb",  0) for v in perf_steps.values()]
+    peak_mb = [v.get("ram_peak_mb", 0) for v in perf_steps.values()]
+    # headroom = total system RAM minus avg used — always fills bar to the top
+    free_mb = [max(_TOTAL_RAM_MB - a, 0) for a in avg_mb]
 
-    # % of total RAM
-    peak_pct     = [round(p / _TOTAL_RAM_MB * 100, 1) for p in peak_mb]
-    free_min_pct = [round(f / _TOTAL_RAM_MB * 100, 1) for f in free_min]
+    avg_pct  = [round(a / _TOTAL_RAM_MB * 100, 1) for a in avg_mb]
+    peak_pct = [round(p / _TOTAL_RAM_MB * 100, 1) for p in peak_mb]
 
     fig = go.Figure()
 
-    # Used RAM (peak)
+    # Avg RAM used
     fig.add_trace(go.Bar(
-        name="RAM Peak Used (MB)",
+        name="RAM Avg Used (MB)",
         x=labels,
-        y=peak_mb,
-        yaxis="y1",
+        y=avg_mb,
         marker_color=_AMBER,
-        text=[f"{p:.0f} MB<br>({pp:.1f}%)" for p, pp in zip(peak_mb, peak_pct)],
+        text=[f"{a:.0f} MB<br>({ap:.1f}%)" for a, ap in zip(avg_mb, avg_pct)],
         textposition="inside",
         insidetextanchor="middle",
         hovertemplate=(
             "<b>%{x}</b><br>"
-            "RAM peak: %{y:.0f} MB (%{customdata:.1f}% of system)<extra></extra>"
+            "RAM avg: %{y:.0f} MB (%{customdata:.1f}% of system)<extra></extra>"
         ),
-        customdata=peak_pct,
+        customdata=avg_pct,
     ))
 
-    # Free RAM (minimum during step)
+    # Free headroom — fills bar to total system RAM
     fig.add_trace(go.Bar(
-        name="RAM Free (min during step)",
+        name="RAM Free Headroom",
         x=labels,
-        y=free_min,
-        yaxis="y1",
+        y=free_mb,
         marker_color=_GREEN_FREE,
         marker_line_width=0,
-        text=[f"{f:.0f} MB free<br>({fp:.1f}%)" for f, fp in zip(free_min, free_min_pct)],
-        textposition="inside",
-        insidetextanchor="middle",
         hovertemplate=(
             "<b>%{x}</b><br>"
-            "Min free RAM: %{y:.0f} MB (%{customdata:.1f}% of system)<extra></extra>"
+            "RAM headroom: %{y:.0f} MB<extra></extra>"
         ),
-        customdata=free_min_pct,
     ))
 
-    y_max_mb  = _TOTAL_RAM_MB * 1.05
-    y_max_pct = 105.0
+    # Peak markers as scatter dots — mirrors CPU chart style
+    fig.add_trace(go.Scatter(
+        name="RAM Peak (MB)",
+        x=labels,
+        y=peak_mb,
+        mode="markers+text",
+        marker=dict(symbol="diamond", size=10, color=_AMBER_LIGHT, line=dict(color="#fff", width=1)),
+        text=[f"peak {p:.0f} MB ({pp:.1f}%)" for p, pp in zip(peak_mb, peak_pct)],
+        textposition="top center",
+        textfont=dict(size=10, color=_AMBER_LIGHT),
+        hovertemplate="<b>%{x}</b><br>RAM peak: %{y:.0f} MB (%{customdata:.1f}%)<extra></extra>",
+        customdata=peak_pct,
+    ))
 
     fig.update_layout(
         barmode="stack",
@@ -193,18 +199,9 @@ def chart_ram(perf_steps: dict) -> Figure:
         xaxis=dict(title="", gridcolor=_GRID),
         yaxis=dict(
             title="RAM (MB)",
-            range=[0, y_max_mb],
+            range=[0, _TOTAL_RAM_MB * 1.15],
             gridcolor=_GRID,
             zeroline=False,
-        ),
-        yaxis2=dict(
-            title="% of system RAM",
-            range=[0, y_max_pct],
-            overlaying="y",
-            side="right",
-            showgrid=False,
-            zeroline=False,
-            ticksuffix="%",
         ),
         annotations=[dict(
             x=1, y=1.06, xref="paper", yref="paper",

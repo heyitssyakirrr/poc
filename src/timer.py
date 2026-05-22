@@ -1,9 +1,9 @@
 # src/timer.py
-# Context manager that measures elapsed time, RAM (delta + peak + free),
+# Context manager that measures elapsed time, RAM (delta + avg + peak + free),
 # and CPU (avg + peak) per step.
 #
 # Background thread samples every 100 ms:
-#   - process RSS      → ram_peak_mb
+#   - process RSS      → ram_avg_mb, ram_peak_mb
 #   - system free RAM  → ram_free_min_mb  (worst-case pressure during step)
 #   - cpu_percent      → cpu_avg_percent, cpu_peak_percent
 #
@@ -30,7 +30,7 @@ def timer(label: str, store: bool = True):
     """
     Measures per step:
       duration_seconds
-      ram_before_mb, ram_after_mb, ram_delta_mb, ram_peak_mb
+      ram_before_mb, ram_after_mb, ram_delta_mb, ram_avg_mb, ram_peak_mb
       ram_free_before_mb, ram_free_after_mb, ram_free_min_mb
       cpu_avg_percent, cpu_peak_percent
       cpu_cores_total
@@ -48,6 +48,7 @@ def timer(label: str, store: bool = True):
     _stop        = threading.Event()
     _peak_rss    = [mem_before]
     _free_min    = [ram_free_before]
+    _rss_samples = []                           # collect samples → avg + peak
     _cpu_samples = []                           # collect samples → avg + peak
 
     def _sampler():
@@ -55,6 +56,7 @@ def timer(label: str, store: bool = True):
             # RAM
             rss  = process.memory_info().rss / 1024 ** 2
             free = psutil.virtual_memory().available / 1024 ** 2
+            _rss_samples.append(rss)
             if rss  > _peak_rss[0]: _peak_rss[0] = rss
             if free < _free_min[0]: _free_min[0] = free
 
@@ -84,12 +86,14 @@ def timer(label: str, store: bool = True):
     mem_after      = process.memory_info().rss / 1024 ** 2
     ram_free_after = psutil.virtual_memory().available / 1024 ** 2
 
+    ram_avg  = round(sum(_rss_samples) / len(_rss_samples), 2) if _rss_samples else round(mem_before, 2)
     cpu_avg  = round(sum(_cpu_samples) / len(_cpu_samples), 1) if _cpu_samples else 0.0
     cpu_peak = round(max(_cpu_samples), 1)                      if _cpu_samples else 0.0
 
     logger.info(
         f"[END]   {label} — {elapsed:.2f}s | "
         f"RAM Δ: {mem_after - mem_before:+.1f} MB | "
+        f"RAM avg: {ram_avg:.1f} MB | "
         f"RAM peak: {_peak_rss[0]:.1f} MB | "
         f"Free RAM min: {_free_min[0]:.1f} MB | "
         f"CPU avg: {cpu_avg:.1f}% | CPU peak: {cpu_peak:.1f}%"
@@ -99,14 +103,15 @@ def timer(label: str, store: bool = True):
         _metrics[label] = {
             "duration_seconds":  round(elapsed, 4),
             # process RAM
-            "ram_before_mb":     round(mem_before,          2),
-            "ram_after_mb":      round(mem_after,           2),
+            "ram_before_mb":     round(mem_before,             2),
+            "ram_after_mb":      round(mem_after,              2),
             "ram_delta_mb":      round(mem_after - mem_before, 2),
-            "ram_peak_mb":       round(_peak_rss[0],        2),
+            "ram_avg_mb":        ram_avg,
+            "ram_peak_mb":       round(_peak_rss[0],           2),
             # system free RAM
-            "ram_free_before_mb": round(ram_free_before,    2),
-            "ram_free_after_mb":  round(ram_free_after,     2),
-            "ram_free_min_mb":    round(_free_min[0],       2),
+            "ram_free_before_mb": round(ram_free_before,       2),
+            "ram_free_after_mb":  round(ram_free_after,        2),
+            "ram_free_min_mb":    round(_free_min[0],          2),
             # CPU
             "cpu_avg_percent":   cpu_avg,
             "cpu_peak_percent":  cpu_peak,
