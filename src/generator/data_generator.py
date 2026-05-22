@@ -81,7 +81,7 @@ def generate_parquet() -> None:
     rows_written = 0
     writer       = None
 
-    with timer("generate_and_write_parquet"):
+    with timer("write_parquet"):
         try:
             for i in range(num_chunks):
                 table = _make_chunk(fake, rng, CHUNK_SIZE)
@@ -110,9 +110,9 @@ def generate_parquet() -> None:
 
     # ── Patch throughput into the timer entry ─────────────────────────────────
     size_mb  = PARQUET_FILE.stat().st_size / 1024 ** 2
-    duration = _metrics["generate_and_write_parquet"]["duration_seconds"]
+    duration = _metrics["write_parquet"]["duration_seconds"]
 
-    _metrics["generate_and_write_parquet"].update({
+    _metrics["write_parquet"].update({
         "rows_written":       rows_written,
         "parquet_size_mb":    round(size_mb, 2),
         "rows_per_second":    round(rows_written / duration, 0),
@@ -122,5 +122,5 @@ def generate_parquet() -> None:
     logger.success(
         f"Parquet written → {PARQUET_FILE.name} | "
         f"{size_mb:.1f} MB | {rows_written:,} rows | "
-        f"{_metrics['generate_and_write_parquet']['rows_per_second']:,.0f} rows/s"
+        f"{_metrics['write_parquet']['rows_per_second']:,.0f} rows/s"
     )

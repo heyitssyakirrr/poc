@@ -54,7 +54,7 @@ async def index(request: Request):
     }
 
     # KPI cards: pull from individual steps
-    gen  = perf_steps.get("generate_and_write_parquet", {})
+    gen  = perf_steps.get("write_parquet", {})
     read = perf_steps.get("read_parquet", {})
 
     kpis = {
