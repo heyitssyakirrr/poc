@@ -22,6 +22,7 @@ import src.logger  # noqa: F401
 from config.settings import (
     DASHBOARD_TITLE, DASHBOARD_HOST, DASHBOARD_PORT,
     DASHBOARD_DEBUG, METRICS_FILE,
+    STEP_WRITE, STEP_READ,
 )
 from src.dashboard.assets import ensure_plotly_js
 from src.dashboard.charts import chart_cpu, chart_ram, chart_waterfall
@@ -53,39 +54,40 @@ async def index(request: Request):
         if isinstance(v, dict) and "duration_seconds" in v
     }
 
-    # TOP-LEVEL ONLY — for KPI cards, step breakdown, CPU chart, RAM chart
+    # Top-level steps only — for KPI cards, step breakdown, CPU chart, RAM chart
     perf_steps_top = {k: v for k, v in perf_steps.items() if "." not in k}
 
-    # ALL steps including sub-processes — for waterfall chart only
+    # All steps including sub-processes — for waterfall chart only
     perf_steps_all = perf_steps
 
-    # KPI cards: pull from individual steps
-    gen  = perf_steps.get("write_parquet", {})
-    read = perf_steps.get("read_parquet", {})
+    # KPI cards — step keys come from settings constants, never hardcoded strings
+    gen  = perf_steps.get(STEP_WRITE, {})
+    read = perf_steps.get(STEP_READ,  {})
 
     kpis = {
-        "parquet_size_mb":      gen.get("parquet_size_mb")  or read.get("parquet_size_mb"),
-        "total_rows":           gen.get("rows_written")      or read.get("rows_read"),
-        "write_rows_per_sec":   gen.get("rows_per_second"),
-        "write_mb_per_sec":     gen.get("mb_per_second"),
-        "read_rows_per_sec":    read.get("rows_per_second"),
-        "read_mb_per_sec":      read.get("mb_per_second"),
+        "parquet_size_mb":    gen.get("parquet_size_mb")  or read.get("parquet_size_mb"),
+        "total_rows":         gen.get("rows_written")      or read.get("rows_read"),
+        "write_rows_per_sec": gen.get("rows_per_second"),
+        "write_mb_per_sec":   gen.get("mb_per_second"),
+        "read_rows_per_sec":  read.get("rows_per_second"),
+        "read_mb_per_sec":    read.get("mb_per_second"),
     }
 
-    import psutil
-    cpu_cores = psutil.cpu_count(logical=True)
+    total_ram_mb = psutil.virtual_memory().total / 1024 ** 2
+    cpu_cores    = psutil.cpu_count(logical=True)
 
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
-            "title":          DASHBOARD_TITLE,
-            "perf_steps":     perf_steps_top,
-            "kpis":           kpis,
-            "cpu_cores_total": cpu_cores,
-            "fig_cpu":         _fig_json(chart_cpu(perf_steps_top)),
-            "fig_ram":         _fig_json(chart_ram(perf_steps_top)),
-            "fig_waterfall":   _fig_json(chart_waterfall(perf_steps_all)),
+            "title":            DASHBOARD_TITLE,
+            "perf_steps":       perf_steps_top,
+            "kpis":             kpis,
+            "cpu_cores_total":  cpu_cores,
+            "total_ram_mb":     round(total_ram_mb, 0),   # passed explicitly — no template guesswork
+            "fig_cpu":          _fig_json(chart_cpu(perf_steps_top)),
+            "fig_ram":          _fig_json(chart_ram(perf_steps_top)),
+            "fig_waterfall":    _fig_json(chart_waterfall(perf_steps_all)),
         },
     )
 
@@ -93,8 +95,8 @@ async def index(request: Request):
 @app.get("/health")
 async def health():
     return JSONResponse({
-        "status":          "ok",
-        "metrics_exists":  METRICS_FILE.exists(),
+        "status":         "ok",
+        "metrics_exists": METRICS_FILE.exists(),
     })
 
 

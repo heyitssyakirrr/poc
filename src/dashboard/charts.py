@@ -1,6 +1,3 @@
-# src/dashboard/charts.py
-# Performance-focused Plotly charts.
-#
 #   chart_cpu(perf_steps)        — stacked bar: CPU used (avg) vs available per step.
 #                                  Max bar height = cores × 100%.
 #                                  Peak shown as scatter diamond marker.
@@ -9,19 +6,24 @@
 #                                  Peak shown as scatter diamond marker.
 #   chart_waterfall(perf_steps)  — horizontal Gantt: each step placed
 #                                  sequentially on a wall-clock time axis.
+#
+# Sub-process display labels are driven by STEP_LABEL_MAP in config/settings.py.
+# Add a new sub-process? Add one line there — no changes needed here.
 
 import psutil
 import plotly.graph_objects as go
 from plotly.graph_objects import Figure
 
+from config.settings import STEP_LABEL_MAP
+
 # ── Palette ───────────────────────────────────────────────────────────────────
 _BLUE        = "#2563EB"
 _BLUE_LIGHT  = "#93C5FD"
-_BLUE_FREE   = "#DBEAFE"   # free CPU headroom
+_BLUE_FREE   = "#DBEAFE"
 _AMBER       = "#F59E0B"
 _AMBER_LIGHT = "#FCD34D"
 _GREEN       = "#10B981"
-_GREEN_FREE  = "#D1FAE5"   # free RAM headroom
+_GREEN_FREE  = "#D1FAE5"
 _SLATE       = "#475569"
 _GRID        = "rgba(148,163,184,0.2)"
 _FONT        = dict(family="'IBM Plex Mono', 'Courier New', monospace", size=12, color="#1e293b")
@@ -54,7 +56,6 @@ def chart_cpu(perf_steps: dict) -> Figure:
 
     fig = go.Figure()
 
-    # Used CPU (avg)
     fig.add_trace(go.Bar(
         name="CPU Used (avg %)",
         x=labels,
@@ -73,7 +74,6 @@ def chart_cpu(perf_steps: dict) -> Figure:
         customdata=est_cores,
     ))
 
-    # Free CPU headroom
     fig.add_trace(go.Bar(
         name="CPU Free",
         x=labels,
@@ -89,7 +89,6 @@ def chart_cpu(perf_steps: dict) -> Figure:
         ),
     ))
 
-    # Peak markers as scatter dots
     fig.add_trace(go.Scatter(
         name="CPU Peak %",
         x=labels,
@@ -131,11 +130,7 @@ def chart_cpu(perf_steps: dict) -> Figure:
         hoverlabel=dict(
             bgcolor="#1e293b",
             bordercolor="#334155",
-            font=dict(
-                family="'IBM Plex Mono', 'Courier New', monospace",
-                size=12,
-                color="#f1f5f9",
-            ),
+            font=dict(family="'IBM Plex Mono', 'Courier New', monospace", size=12, color="#f1f5f9"),
         ),
     )
     return fig
@@ -149,12 +144,11 @@ def chart_ram(perf_steps: dict) -> Figure:
       Bottom (amber) = RAM avg used by process during step (MB)
       Top    (light) = remaining RAM headroom = total system RAM - avg used
     Every bar reaches exactly _TOTAL_RAM_MB → consistent height, instant context.
-    Peak shown as scatter diamond marker (same pattern as CPU chart).
+    Peak shown as scatter diamond marker.
     """
     labels  = _step_labels(perf_steps)
     avg_mb  = [v.get("ram_avg_mb",  0) for v in perf_steps.values()]
     peak_mb = [v.get("ram_peak_mb", 0) for v in perf_steps.values()]
-    # headroom = total system RAM minus avg used — always fills bar to the top
     free_mb = [max(_TOTAL_RAM_MB - a, 0) for a in avg_mb]
 
     avg_pct  = [round(a / _TOTAL_RAM_MB * 100, 1) for a in avg_mb]
@@ -162,7 +156,6 @@ def chart_ram(perf_steps: dict) -> Figure:
 
     fig = go.Figure()
 
-    # Avg RAM used
     fig.add_trace(go.Bar(
         name="RAM Avg Used (MB)",
         x=labels,
@@ -181,7 +174,6 @@ def chart_ram(perf_steps: dict) -> Figure:
         customdata=avg_pct,
     ))
 
-    # Free headroom — fills bar to total system RAM
     fig.add_trace(go.Bar(
         name="RAM Free Headroom",
         x=labels,
@@ -196,7 +188,6 @@ def chart_ram(perf_steps: dict) -> Figure:
         ),
     ))
 
-    # Peak markers as scatter dots — mirrors CPU chart style
     fig.add_trace(go.Scatter(
         name="RAM Peak (MB)",
         x=labels,
@@ -240,11 +231,7 @@ def chart_ram(perf_steps: dict) -> Figure:
         hoverlabel=dict(
             bgcolor="#1e293b",
             bordercolor="#334155",
-            font=dict(
-                family="'IBM Plex Mono', 'Courier New', monospace",
-                size=12,
-                color="#f1f5f9",
-            ),
+            font=dict(family="'IBM Plex Mono', 'Courier New', monospace", size=12, color="#f1f5f9"),
         ),
     )
     return fig
@@ -258,30 +245,20 @@ def chart_waterfall(perf_steps: dict) -> Figure:
     Naming convention: "parent_step.sub_process" → auto-grouped.
     Top-level steps shown as section dividers.
     Sub-processes shown as individual bars with duration + RAM + CPU on hover.
-    Fully data-driven — adding steps or sub-processes needs zero chart changes.
+
+    Sub-process display labels come from STEP_LABEL_MAP in config/settings.py.
+    Adding a new sub-process only requires adding one entry there.
     """
-    # ── Separate parent steps from sub-processes ──────────────────────────────
     parents = {k: v for k, v in perf_steps.items() if "." not in k}
     subs    = {k: v for k, v in perf_steps.items() if "." in k}
 
-    # ── Clean display names for child processes ────────────────────────────────
-    child_label_map = {
-        "init":                      "Initialize",
-        "generate_and_write_chunks": "Write Chunks",
-        "close_and_flush":           "Close & Flush",
-        "open_and_deserialize":      "Load & Deserialize",
-        "validate_schema":           "Validate Schema",
-    }
-
-    # ── Build ordered row list: parent header → its children ──────────────────
-    rows = []
-
+    rows   = []
     cursor = 0.0
+
     for parent_key, parent_val in parents.items():
         parent_label = parent_key.replace("_", " ").title()
         parent_dur   = parent_val.get("duration_seconds", 0)
 
-        # parent header row — uppercase, no symbol
         rows.append({
             "label":     parent_label.upper(),
             "start":     cursor,
@@ -290,13 +267,15 @@ def chart_waterfall(perf_steps: dict) -> Figure:
             "is_parent": True,
         })
 
-        # children — clean indent, no arrow
-        children = {k: v for k, v in subs.items() if k.startswith(parent_key + ".")}
+        children     = {k: v for k, v in subs.items() if k.startswith(parent_key + ".")}
         child_cursor = cursor
+
         for child_key, child_val in children.items():
             raw         = child_key.split(".", 1)[1]
-            child_label = child_label_map.get(raw, raw.replace("_", " ").title())
+            # Label resolved from settings — no hardcoding here
+            child_label = STEP_LABEL_MAP.get(raw, raw.replace("_", " ").title())
             child_dur   = child_val.get("duration_seconds", 0)
+
             rows.append({
                 "label":     f"    {child_label}",
                 "start":     child_cursor,
@@ -310,7 +289,6 @@ def chart_waterfall(perf_steps: dict) -> Figure:
 
     total = cursor
 
-    # ── Color scale: blue (low CPU) → amber (high CPU) ────────────────────────
     all_cpu = [r["metrics"].get("cpu_avg_percent", 0) for r in rows if not r["is_parent"]]
     max_cpu = max(all_cpu) if all_cpu else 1
 
@@ -362,14 +340,11 @@ def chart_waterfall(perf_steps: dict) -> Figure:
             ),
         ))
 
-    # ── Section divider shapes between parent groups ──────────────────────────
     y_labels = [row["label"] for row in rows]
-    shapes = []
-    annotations_extra = []
+    shapes   = []
 
-    for i, row in enumerate(rows):
+    for row in rows:
         if row["is_parent"]:
-            # horizontal rule above each parent (except first)
             shapes.append(dict(
                 type="line",
                 xref="paper", yref="y",
@@ -392,11 +367,7 @@ def chart_waterfall(perf_steps: dict) -> Figure:
         yaxis=dict(
             autorange="reversed",
             gridcolor=_GRID,
-            tickfont=dict(
-                family="'IBM Plex Mono', monospace",
-                size=11,
-            ),
-            # bold parent labels via ticktext
+            tickfont=dict(family="'IBM Plex Mono', monospace", size=11),
             tickmode="array",
             tickvals=y_labels,
             ticktext=[
@@ -413,13 +384,9 @@ def chart_waterfall(perf_steps: dict) -> Figure:
             xanchor="right",
         )],
         hoverlabel=dict(
-            bgcolor="#1e293b",        # dark slate background for all hovers
+            bgcolor="#1e293b",
             bordercolor="#334155",
-            font=dict(
-                family="'IBM Plex Mono', 'Courier New', monospace",
-                size=12,
-                color="#f1f5f9",      # near-white text
-            ),
+            font=dict(family="'IBM Plex Mono', 'Courier New', monospace", size=12, color="#f1f5f9"),
         ),
     )
     return fig

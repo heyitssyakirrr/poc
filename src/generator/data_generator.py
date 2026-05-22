@@ -1,7 +1,8 @@
 # src/generator/data_generator.py
 # Generates TOTAL_ROWS of realistic banking transactions in CHUNK_SIZE batches
 # and streams them into a single Parquet file — RAM stays bounded at ~CHUNK_SIZE rows.
-# After writing, throughput metrics (rows/s, MB/s, file size) are added to the timer entry.
+# After writing, throughput metrics (rows/s, MB/s, file size) are patched into
+# the timer entry via patch_metrics() — no direct access to timer internals.
 
 import random
 import pandas as pd
@@ -13,8 +14,9 @@ from loguru import logger
 from config.settings import (
     TOTAL_ROWS, CHUNK_SIZE, RANDOM_SEED,
     PARQUET_FILE, PARQUET_COMPRESSION, PARQUET_ROW_GROUP_SIZE,
+    STEP_WRITE,
 )
-from src.timer import timer, _metrics
+from src.timer import timer, patch_metrics, get_metrics
 
 # ── Domain constants ───────────────────────────────────────────────────────────
 TRANSACTION_TYPES = ["CREDIT", "DEBIT", "TRANSFER", "WITHDRAWAL", "DEPOSIT"]
@@ -67,15 +69,15 @@ def _make_chunk(fake: Faker, rng: random.Random, size: int) -> pa.Table:
 def generate_parquet() -> None:
     PARQUET_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    with timer("write_parquet"):
+    with timer(STEP_WRITE):
 
-        with timer("write_parquet.init"):
+        with timer(f"{STEP_WRITE}.init"):
             fake = Faker("en_US")
             Faker.seed(RANDOM_SEED)
-            rng  = random.Random(RANDOM_SEED)
+            rng    = random.Random(RANDOM_SEED)
             writer = None
 
-        with timer("write_parquet.generate_and_write_chunks"):
+        with timer(f"{STEP_WRITE}.generate_and_write_chunks"):
             num_chunks   = TOTAL_ROWS // CHUNK_SIZE
             remainder    = TOTAL_ROWS  % CHUNK_SIZE
             rows_written = 0
@@ -100,14 +102,16 @@ def generate_parquet() -> None:
             finally:
                 pass  # writer closed in next sub-process
 
-        with timer("write_parquet.close_and_flush"):
+        with timer(f"{STEP_WRITE}.close_and_flush"):
             if writer:
                 writer.close()
 
-    # patch throughput into parent step entry (unchanged)
+    # Patch throughput into the parent step entry via the public API —
+    # no direct access to timer internals.
     size_mb  = PARQUET_FILE.stat().st_size / 1024 ** 2
-    duration = _metrics["write_parquet"]["duration_seconds"]
-    _metrics["write_parquet"].update({
+    duration = get_metrics()[STEP_WRITE]["duration_seconds"]
+
+    patch_metrics(STEP_WRITE, {
         "rows_written":    rows_written,
         "parquet_size_mb": round(size_mb, 2),
         "rows_per_second": round(rows_written / duration, 0),
@@ -117,5 +121,5 @@ def generate_parquet() -> None:
     logger.success(
         f"Parquet written → {PARQUET_FILE.name} | "
         f"{size_mb:.1f} MB | {rows_written:,} rows | "
-        f"{_metrics['write_parquet']['rows_per_second']:,.0f} rows/s"
+        f"{get_metrics()[STEP_WRITE]['rows_per_second']:,.0f} rows/s"
     )
