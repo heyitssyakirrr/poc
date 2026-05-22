@@ -143,23 +143,32 @@ def timer(label: str, store: bool = True):
     psutil.cpu_percent(interval=None)    # prime system-wide counter too
 
     # ── Shared mutable state for background thread ────────────────────────────
-    _stop        = threading.Event()
-    _peak_rss    = [mem_before]
-    _free_min    = [ram_free_before]
-    _rss_samples = []
-    _cpu_samples = []
+    _stop               = threading.Event()
+    _peak_rss           = [mem_before]
+    _free_min           = [ram_free_before]
+    _rss_samples        = []
+    _cpu_samples        = []
+    _proc_cpu_samples   = []
+    _sys_used_samples   = []
+
 
     def _sampler():
         while not _stop.is_set():
             rss  = process.memory_info().rss / 1024 ** 2
             free = psutil.virtual_memory().available / 1024 ** 2
+            vm   = psutil.virtual_memory()
+
             _rss_samples.append(rss)
+            _sys_used_samples.append(vm.used / 1024 ** 2)
             if rss  > _peak_rss[0]: _peak_rss[0] = rss
             if free < _free_min[0]: _free_min[0] = free
 
-            cpu = psutil.cpu_percent(interval=None)
-            if cpu > 0:
-                _cpu_samples.append(cpu)
+            sys_cpu = psutil.cpu_percent(interval=None)
+            proc_cpu = process.cpu_percent(interval=None)
+            if sys_cpu > 0:
+                _cpu_samples.append(sys_cpu)
+            if proc_cpu > 0:
+                _proc_cpu_samples.append(proc_cpu)
 
             _stop.wait(timeout=0.1)
 
@@ -184,7 +193,11 @@ def timer(label: str, store: bool = True):
 
     ram_avg  = round(sum(_rss_samples) / len(_rss_samples), 2) if _rss_samples else round(mem_before, 2)
     cpu_avg  = round(sum(_cpu_samples) / len(_cpu_samples), 1) if _cpu_samples else 0.0
-    cpu_peak = round(max(_cpu_samples), 1)                      if _cpu_samples else 0.0
+    cpu_peak = round(max(_cpu_samples), 1)                     if _cpu_samples else 0.0
+    proc_cpu_avg  = round(sum(_proc_cpu_samples) / len(_proc_cpu_samples)/_CPU_CORES, 1) if _proc_cpu_samples else 0.0
+    sys_used_avg  = round(sum(_sys_used_samples) / len(_sys_used_samples), 2) if _sys_used_samples else ram_avg
+    ram_others_avg = max(round(sys_used_avg - ram_avg, 2), 0)
+    cpu_others_avg = max(round(cpu_avg - proc_cpu_avg, 1), 0)
 
     logger.info(
         f"[END]   {label} — {elapsed:.2f}s | "
@@ -208,10 +221,14 @@ def timer(label: str, store: bool = True):
             "ram_free_before_mb": round(ram_free_before,        2),
             "ram_free_after_mb":  round(ram_free_after,         2),
             "ram_free_min_mb":    round(_free_min[0],           2),
+            "ram_sys_used_avg_mb":    sys_used_avg,
+            "ram_others_avg_mb":      ram_others_avg,
             # CPU
             "cpu_avg_percent":    cpu_avg,
             "cpu_peak_percent":   cpu_peak,
             "cpu_cores_total":    _CPU_CORES,
+            "cpu_proc_avg_percent": proc_cpu_avg,
+            "cpu_others_avg_percent": cpu_others_avg,
             # timestamps
             "start_time":         start_dt.isoformat(),
             "end_time":           end_dt.isoformat(),

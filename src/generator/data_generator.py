@@ -53,12 +53,11 @@ def _make_chunk(fake: Faker, rng: random.Random, size: int) -> pa.Table:
             "channel":           rng.choices(CHANNELS,                                  k=size),
             "status":            rng.choices(STATUSES, weights=[85, 5, 7, 3],           k=size),
             "merchant_category": rng.choices(MERCHANT_CATS,                             k=size),
-            "timestamp":         pa.array(
-                                     pd.to_datetime(
-                                         [fake.date_time_between(start_date="-2y") for _ in range(size)]
-                                     ),
-                                     type=pa.timestamp("ms"),
-                                 ),
+            "timestamp": pa.array(
+                pd.to_datetime([fake.date_time_between(start_date="-2y") for _ in range(size)])
+                .floor("ms"),
+                type=pa.timestamp("ms"),
+            ),
             "balance_after":     [round(rng.uniform(0.0, 200_000.0), 2)                 for _ in range(size)],
             "is_flagged":        rng.choices([True, False], weights=[2, 98],             k=size),
         },

@@ -30,7 +30,7 @@ _FONT        = dict(family="'IBM Plex Mono', 'Courier New', monospace", size=12,
 _MARGIN      = dict(t=60, b=40, l=70, r=80)
 
 _CPU_CORES    = psutil.cpu_count(logical=True)
-_MAX_CPU_PCT  = _CPU_CORES * 100
+_MAX_CPU_PCT  = 100
 _TOTAL_RAM_MB = psutil.virtual_memory().total / 1024 ** 2
 
 
@@ -41,58 +41,63 @@ def _step_labels(perf_steps: dict) -> list[str]:
 # ── CPU stacked bar ───────────────────────────────────────────────────────────
 
 def chart_cpu(perf_steps: dict) -> Figure:
-    """
-    Stacked bar per step:
-      Bottom (blue)  = CPU avg % used   (system-wide, so can exceed 100%)
-      Top    (light) = CPU % still free  = (cores × 100) - used
-    Total bar always = cores × 100  → gives instant headroom context.
-    Peak shown as scatter diamond marker.
-    """
-    labels    = _step_labels(perf_steps)
-    used      = [v.get("cpu_avg_percent",  0) for v in perf_steps.values()]
-    peak      = [v.get("cpu_peak_percent", 0) for v in perf_steps.values()]
-    free      = [max(_MAX_CPU_PCT - u, 0)     for u in used]
-    est_cores = [round(u / 100, 1)            for u in used]
+    labels      = _step_labels(perf_steps)
+    proc_cpu    = [v.get("cpu_proc_avg_percent",   v.get("cpu_avg_percent", 0)) for v in perf_steps.values()]
+    others_cpu  = [v.get("cpu_others_avg_percent", 0) for v in perf_steps.values()]
+    peak        = [v.get("cpu_peak_percent",        0) for v in perf_steps.values()]
+    free_cpu    = [max(_MAX_CPU_PCT - p - o, 0) for p, o in zip(proc_cpu, others_cpu)]
+    est_cores = [round(p / 100 * _CPU_CORES, 1) for p in proc_cpu]  # back-calculate actual cores used
+    text=[f"{p:.1f}%<br>~{c}c" for p, c in zip(proc_cpu, est_cores)]
 
     fig = go.Figure()
 
+    # Layer 1 — pipeline process
     fig.add_trace(go.Bar(
-        name="CPU Used (avg %)",
-        x=labels,
-        y=used,
+        name="Pipeline CPU (avg %)",
+        x=labels, y=proc_cpu,
         marker_color=_BLUE,
-        text=[f"{u:.1f}%<br>~{c} cores" for u, c in zip(used, est_cores)],
-        textposition="inside",
-        insidetextanchor="middle",
+        text=[f"{p:.1f}%<br>~{c}c" for p, c in zip(proc_cpu, est_cores)],
+        textposition="inside", insidetextanchor="middle",
         hovertemplate=(
             "<b>%{x}</b><br>"
             "<span style='color:#475569'>──────────────────────────</span><br>"
-            "<span style='color:#f1f5f9'>CPU avg  </span>  %{y:.1f}%<br>"
-            "<span style='color:#f1f5f9'>Est. cores</span>  %{customdata:.1f} / " + str(_CPU_CORES) + "<br>"
+            "<span style='color:#f1f5f9'>Pipeline CPU avg </span>  %{y:.1f}%<br>"
             "<extra></extra>"
         ),
-        customdata=est_cores,
     ))
 
+    # Layer 2 — other processes
     fig.add_trace(go.Bar(
-        name="CPU Free",
-        x=labels,
-        y=free,
+        name="Other Processes CPU",
+        x=labels, y=others_cpu,
+        marker_color=_SLATE,
+        marker_opacity=0.6,
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "<span style='color:#475569'>──────────────────────────</span><br>"
+            "<span style='color:#f1f5f9'>Other processes  </span>  %{y:.1f}%<br>"
+            "<extra></extra>"
+        ),
+    ))
+
+    # Layer 3 — genuinely free
+    fig.add_trace(go.Bar(
+        name="CPU Free (actual)",
+        x=labels, y=free_cpu,
         marker_color=_BLUE_FREE,
         marker_line_width=0,
         hovertemplate=(
             "<b>%{x}</b><br>"
             "<span style='color:#475569'>──────────────────────────</span><br>"
-            "<span style='color:#f1f5f9'>CPU free </span>  %{y:.1f}%<br>"
-            "<span style='color:#f1f5f9'>Max      </span>  " + str(_CPU_CORES) + " cores × 100 = " + str(_MAX_CPU_PCT) + "%<br>"
+            "<span style='color:#f1f5f9'>Actual free      </span>  %{y:.1f}%<br>"
             "<extra></extra>"
         ),
     ))
 
+    # Peak marker
     fig.add_trace(go.Scatter(
         name="CPU Peak %",
-        x=labels,
-        y=peak,
+        x=labels, y=peak,
         mode="markers+text",
         marker=dict(symbol="diamond", size=10, color=_AMBER, line=dict(color="#fff", width=1)),
         text=[f"peak {p:.0f}%" for p in peak],
@@ -101,7 +106,7 @@ def chart_cpu(perf_steps: dict) -> Figure:
         hovertemplate=(
             "<b>%{x}</b><br>"
             "<span style='color:#475569'>──────────────────────────</span><br>"
-            "<span style='color:#f1f5f9'>CPU peak </span>  %{y:.1f}%<br>"
+            "<span style='color:#f1f5f9'>CPU peak         </span>  %{y:.1f}%<br>"
             "<extra></extra>"
         ),
     ))
@@ -114,22 +119,10 @@ def chart_cpu(perf_steps: dict) -> Figure:
         margin=_MARGIN,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         xaxis=dict(title="", gridcolor=_GRID),
-        yaxis=dict(
-            title=f"CPU % (max = {_CPU_CORES} cores × 100 = {_MAX_CPU_PCT}%)",
-            range=[0, _MAX_CPU_PCT * 1.15],
-            gridcolor=_GRID,
-            zeroline=False,
-        ),
-        annotations=[dict(
-            x=1, y=1.06, xref="paper", yref="paper",
-            text=f"Machine: {_CPU_CORES} logical cores",
-            showarrow=False,
-            font=dict(size=10, color=_SLATE),
-            xanchor="right",
-        )],
+        yaxis=dict(title="CPU %"),
+        annotations=[dict(text=f"Machine: {_CPU_CORES} logical cores")],
         hoverlabel=dict(
-            bgcolor="#1e293b",
-            bordercolor="#334155",
+            bgcolor="#1e293b", bordercolor="#334155",
             font=dict(family="'IBM Plex Mono', 'Courier New', monospace", size=12, color="#f1f5f9"),
         ),
     )
@@ -139,59 +132,63 @@ def chart_cpu(perf_steps: dict) -> Figure:
 # ── RAM stacked bar ───────────────────────────────────────────────────────────
 
 def chart_ram(perf_steps: dict) -> Figure:
-    """
-    Stacked bar per step:
-      Bottom (amber) = RAM avg used by process during step (MB)
-      Top    (light) = remaining RAM headroom = total system RAM - avg used
-    Every bar reaches exactly _TOTAL_RAM_MB → consistent height, instant context.
-    Peak shown as scatter diamond marker.
-    """
-    labels  = _step_labels(perf_steps)
-    avg_mb  = [v.get("ram_avg_mb",  0) for v in perf_steps.values()]
-    peak_mb = [v.get("ram_peak_mb", 0) for v in perf_steps.values()]
-    free_mb = [max(_TOTAL_RAM_MB - a, 0) for a in avg_mb]
+    labels      = _step_labels(perf_steps)
+    proc_mb     = [v.get("ram_avg_mb",        0) for v in perf_steps.values()]
+    others_mb   = [v.get("ram_others_avg_mb", 0) for v in perf_steps.values()]
+    peak_mb     = [v.get("ram_peak_mb",        0) for v in perf_steps.values()]
+    free_mb     = [max(_TOTAL_RAM_MB - p - o, 0) for p, o in zip(proc_mb, others_mb)]
 
-    avg_pct  = [round(a / _TOTAL_RAM_MB * 100, 1) for a in avg_mb]
-    peak_pct = [round(p / _TOTAL_RAM_MB * 100, 1) for p in peak_mb]
+    proc_pct    = [round(p / _TOTAL_RAM_MB * 100, 1) for p in proc_mb]
+    others_pct  = [round(o / _TOTAL_RAM_MB * 100, 1) for o in others_mb]
+    peak_pct    = [round(p / _TOTAL_RAM_MB * 100, 1) for p in peak_mb]
 
     fig = go.Figure()
 
     fig.add_trace(go.Bar(
-        name="RAM Avg Used (MB)",
-        x=labels,
-        y=avg_mb,
+        name="Pipeline RAM (avg)",
+        x=labels, y=proc_mb,
         marker_color=_AMBER,
-        text=[f"{a:.0f} MB<br>({ap:.1f}%)" for a, ap in zip(avg_mb, avg_pct)],
-        textposition="inside",
-        insidetextanchor="middle",
+        text=[f"{p:.0f} MB<br>({pp:.1f}%)" for p, pp in zip(proc_mb, proc_pct)],
+        textposition="inside", insidetextanchor="middle",
         hovertemplate=(
             "<b>%{x}</b><br>"
             "<span style='color:#475569'>──────────────────────────</span><br>"
-            "<span style='color:#f1f5f9'>RAM avg  </span>  %{y:.0f} MB<br>"
-            "<span style='color:#f1f5f9'>% of sys </span>  %{customdata:.1f}%<br>"
+            "<span style='color:#f1f5f9'>Pipeline RAM avg </span>  %{y:.0f} MB  (%{customdata:.1f}%)<br>"
             "<extra></extra>"
         ),
-        customdata=avg_pct,
+        customdata=proc_pct,
     ))
 
     fig.add_trace(go.Bar(
-        name="RAM Free Headroom",
-        x=labels,
-        y=free_mb,
+        name="Other Processes RAM",
+        x=labels, y=others_mb,
+        marker_color=_SLATE,
+        marker_opacity=0.5,
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "<span style='color:#475569'>──────────────────────────</span><br>"
+            "<span style='color:#f1f5f9'>Other processes  </span>  %{y:.0f} MB  (%{customdata:.1f}%)<br>"
+            "<extra></extra>"
+        ),
+        customdata=others_pct,
+    ))
+
+    fig.add_trace(go.Bar(
+        name="RAM Free (actual)",
+        x=labels, y=free_mb,
         marker_color=_GREEN_FREE,
         marker_line_width=0,
         hovertemplate=(
             "<b>%{x}</b><br>"
             "<span style='color:#475569'>──────────────────────────</span><br>"
-            "<span style='color:#f1f5f9'>Headroom </span>  %{y:.0f} MB<br>"
+            "<span style='color:#f1f5f9'>Actual free      </span>  %{y:.0f} MB<br>"
             "<extra></extra>"
         ),
     ))
 
     fig.add_trace(go.Scatter(
         name="RAM Peak (MB)",
-        x=labels,
-        y=peak_mb,
+        x=labels, y=peak_mb,
         mode="markers+text",
         marker=dict(symbol="diamond", size=10, color=_AMBER_LIGHT, line=dict(color="#fff", width=1)),
         text=[f"peak {p:.0f} MB ({pp:.1f}%)" for p, pp in zip(peak_mb, peak_pct)],
@@ -200,8 +197,7 @@ def chart_ram(perf_steps: dict) -> Figure:
         hovertemplate=(
             "<b>%{x}</b><br>"
             "<span style='color:#475569'>──────────────────────────</span><br>"
-            "<span style='color:#f1f5f9'>RAM peak </span>  %{y:.0f} MB<br>"
-            "<span style='color:#f1f5f9'>% of sys </span>  %{customdata:.1f}%<br>"
+            "<span style='color:#f1f5f9'>RAM peak         </span>  %{y:.0f} MB  (%{customdata:.1f}%)<br>"
             "<extra></extra>"
         ),
         customdata=peak_pct,
@@ -218,19 +214,15 @@ def chart_ram(perf_steps: dict) -> Figure:
         yaxis=dict(
             title="RAM (MB)",
             range=[0, _TOTAL_RAM_MB * 1.15],
-            gridcolor=_GRID,
-            zeroline=False,
+            gridcolor=_GRID, zeroline=False,
         ),
         annotations=[dict(
             x=1, y=1.06, xref="paper", yref="paper",
             text=f"System RAM: {_TOTAL_RAM_MB / 1024:.1f} GB",
-            showarrow=False,
-            font=dict(size=10, color=_SLATE),
-            xanchor="right",
+            showarrow=False, font=dict(size=10, color=_SLATE), xanchor="right",
         )],
         hoverlabel=dict(
-            bgcolor="#1e293b",
-            bordercolor="#334155",
+            bgcolor="#1e293b", bordercolor="#334155",
             font=dict(family="'IBM Plex Mono', 'Courier New', monospace", size=12, color="#f1f5f9"),
         ),
     )
@@ -322,6 +314,7 @@ def chart_waterfall(perf_steps: dict) -> Figure:
             textposition="inside",
             insidetextanchor="start",
             customdata=[[
+                dur,
                 m.get("ram_avg_mb",       0),
                 m.get("ram_peak_mb",      0),
                 m.get("cpu_avg_percent",  0),
@@ -331,11 +324,11 @@ def chart_waterfall(perf_steps: dict) -> Figure:
             hovertemplate=(
                 "<b>%{y}</b><br>"
                 "<span style='color:#475569'>──────────────────────────</span><br>"
-                "<span style='color:#f1f5f9'>Duration </span>  %{x:.3f}s &nbsp;|&nbsp; %{customdata[4]:.1f}% of total<br>"
-                "<span style='color:#f1f5f9'>RAM avg  </span>  %{customdata[0]:.0f} MB<br>"
-                "<span style='color:#f1f5f9'>RAM peak </span>  %{customdata[1]:.0f} MB<br>"
-                "<span style='color:#f1f5f9'>CPU avg  </span>  %{customdata[2]:.1f}%<br>"
-                "<span style='color:#f1f5f9'>CPU peak </span>  %{customdata[3]:.1f}%<br>"
+                "<span style='color:#f1f5f9'>Duration </span>  %{customdata[0]:.3f}s &nbsp;|&nbsp; %{customdata[5]:.1f}% of total<br>"
+                "<span style='color:#f1f5f9'>RAM avg  </span>  %{customdata[1]:.0f} MB<br>"
+                "<span style='color:#f1f5f9'>RAM peak </span>  %{customdata[2]:.0f} MB<br>"
+                "<span style='color:#f1f5f9'>CPU avg  </span>  %{customdata[3]:.1f}%<br>"
+                "<span style='color:#f1f5f9'>CPU peak </span>  %{customdata[4]:.1f}%<br>"
                 "<extra></extra>"
             ),
         ))

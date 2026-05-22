@@ -12,7 +12,7 @@ METRICS_FILE    = DATA_DIR / "performance_metrics.json"
 PLOTLY_JS_DEST  = STATIC_DIR / "js" / "plotly.min.js"   # copied from pip package at startup
 
 # ── Data Generation ────────────────────────────────────────────────────────────
-TOTAL_ROWS       = 5_000_000   # total rows to generate
+TOTAL_ROWS       = 1_000_000   # total rows to generate
 CHUNK_SIZE       = 100_000   # rows per batch — tune down if RAM is limited
 RANDOM_SEED      = 42      # fixed seed for reproducible output
 
