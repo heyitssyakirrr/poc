@@ -331,11 +331,11 @@
   <div class="chart-grid-2">
     <div class="chart-card">
       <h3>CPU — Used vs Available ({{ cpu_cores_total }} cores × 100 = {{ cpu_cores_total * 100 }}% max)</h3>
-      <div id="c-cpu" class="plot"></div>
+      <div id="c-cpu" style="width: 100%; height: 310px;"></div>
     </div>
     <div class="chart-card">
       <h3>RAM — Peak Used vs Free (system total: {{ "%.1f"|format(kpis.parquet_size_mb) }} MB file)</h3>
-      <div id="c-ram" class="plot"></div>
+      <div id="c-ram" style="width: 100%; height: 310px;"></div>
     </div>
   </div>
 
@@ -343,7 +343,7 @@
   <div class="chart-grid-1">
     <div class="chart-card">
       <h3>Step Duration — Wall-clock Waterfall</h3>
-      <div id="c-waterfall" class="plot-wide"></div>
+      <div id="c-waterfall" style="width:100%"></div>
     </div>
   </div>
 

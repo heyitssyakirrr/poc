@@ -65,58 +65,53 @@ def _make_chunk(fake: Faker, rng: random.Random, size: int) -> pa.Table:
 
 
 def generate_parquet() -> None:
-    """
-    Stream-write TOTAL_ROWS rows to PARQUET_FILE in CHUNK_SIZE batches.
-    Peak RAM is proportional to CHUNK_SIZE, not TOTAL_ROWS.
-    Throughput metrics are patched into the timer entry after writing.
-    """
     PARQUET_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    fake = Faker("en_US")
-    Faker.seed(RANDOM_SEED)
-    rng  = random.Random(RANDOM_SEED)
-
-    num_chunks   = TOTAL_ROWS // CHUNK_SIZE
-    remainder    = TOTAL_ROWS  % CHUNK_SIZE
-    rows_written = 0
-    writer       = None
-
     with timer("write_parquet"):
-        try:
-            for i in range(num_chunks):
-                table = _make_chunk(fake, rng, CHUNK_SIZE)
 
-                if writer is None:
-                    writer = pq.ParquetWriter(
-                        PARQUET_FILE,
-                        schema=SCHEMA,
-                        compression=PARQUET_COMPRESSION,
-                    )
+        with timer("write_parquet.init"):
+            fake = Faker("en_US")
+            Faker.seed(RANDOM_SEED)
+            rng  = random.Random(RANDOM_SEED)
+            writer = None
 
-                writer.write_table(table, row_group_size=PARQUET_ROW_GROUP_SIZE)
-                rows_written += CHUNK_SIZE
+        with timer("write_parquet.generate_and_write_chunks"):
+            num_chunks   = TOTAL_ROWS // CHUNK_SIZE
+            remainder    = TOTAL_ROWS  % CHUNK_SIZE
+            rows_written = 0
+            try:
+                for i in range(num_chunks):
+                    table = _make_chunk(fake, rng, CHUNK_SIZE)
+                    if writer is None:
+                        writer = pq.ParquetWriter(
+                            PARQUET_FILE,
+                            schema=SCHEMA,
+                            compression=PARQUET_COMPRESSION,
+                        )
+                    writer.write_table(table, row_group_size=PARQUET_ROW_GROUP_SIZE)
+                    rows_written += CHUNK_SIZE
+                    if (i + 1) % 10 == 0:
+                        pct = rows_written / TOTAL_ROWS * 100
+                        logger.info(f"  Progress: {rows_written:,} / {TOTAL_ROWS:,} rows ({pct:.0f}%)")
 
-                if (i + 1) % 10 == 0:
-                    pct = rows_written / TOTAL_ROWS * 100
-                    logger.info(f"  Progress: {rows_written:,} / {TOTAL_ROWS:,} rows ({pct:.0f}%)")
+                if remainder:
+                    writer.write_table(_make_chunk(fake, rng, remainder), row_group_size=PARQUET_ROW_GROUP_SIZE)
+                    rows_written += remainder
+            finally:
+                pass  # writer closed in next sub-process
 
-            if remainder:
-                writer.write_table(_make_chunk(fake, rng, remainder), row_group_size=PARQUET_ROW_GROUP_SIZE)
-                rows_written += remainder
-
-        finally:
+        with timer("write_parquet.close_and_flush"):
             if writer:
                 writer.close()
 
-    # ── Patch throughput into the timer entry ─────────────────────────────────
+    # patch throughput into parent step entry (unchanged)
     size_mb  = PARQUET_FILE.stat().st_size / 1024 ** 2
     duration = _metrics["write_parquet"]["duration_seconds"]
-
     _metrics["write_parquet"].update({
-        "rows_written":       rows_written,
-        "parquet_size_mb":    round(size_mb, 2),
-        "rows_per_second":    round(rows_written / duration, 0),
-        "mb_per_second":      round(size_mb     / duration, 2),
+        "rows_written":    rows_written,
+        "parquet_size_mb": round(size_mb, 2),
+        "rows_per_second": round(rows_written / duration, 0),
+        "mb_per_second":   round(size_mb / duration, 2),
     })
 
     logger.success(

@@ -53,6 +53,12 @@ async def index(request: Request):
         if isinstance(v, dict) and "duration_seconds" in v
     }
 
+    # TOP-LEVEL ONLY — for KPI cards, step breakdown, CPU chart, RAM chart
+    perf_steps_top = {k: v for k, v in perf_steps.items() if "." not in k}
+
+    # ALL steps including sub-processes — for waterfall chart only
+    perf_steps_all = perf_steps
+
     # KPI cards: pull from individual steps
     gen  = perf_steps.get("write_parquet", {})
     read = perf_steps.get("read_parquet", {})
@@ -74,12 +80,12 @@ async def index(request: Request):
         name="index.html",
         context={
             "title":          DASHBOARD_TITLE,
-            "perf_steps":     perf_steps,
+            "perf_steps":     perf_steps_top,
             "kpis":           kpis,
             "cpu_cores_total": cpu_cores,
-            "fig_cpu":         _fig_json(chart_cpu(perf_steps)),
-            "fig_ram":         _fig_json(chart_ram(perf_steps)),
-            "fig_waterfall":   _fig_json(chart_waterfall(perf_steps)),
+            "fig_cpu":         _fig_json(chart_cpu(perf_steps_top)),
+            "fig_ram":         _fig_json(chart_ram(perf_steps_top)),
+            "fig_waterfall":   _fig_json(chart_waterfall(perf_steps_all)),
         },
     )
 

@@ -11,24 +11,25 @@ from config.settings import PARQUET_FILE, METRICS_FILE
 from src.timer import timer, _metrics
 
 
-def read_parquet(columns: list[str] | None = None) -> pd.DataFrame:
-    """
-    Load the Parquet file into a DataFrame and record throughput metrics.
-    Pass `columns` for column pruning — faster reads, lower RAM.
-    """
-    with timer("read_parquet"):
-        df = pd.read_parquet(PARQUET_FILE, columns=columns)
+def read_parquet(columns=None) -> pd.DataFrame:
+    df = None
 
-    # ── Patch throughput into the timer entry ─────────────────────────────────
+    with timer("read_parquet"):
+
+        with timer("read_parquet.open_and_deserialize"):
+            df = pd.read_parquet(PARQUET_FILE, columns=columns)
+
+        with timer("read_parquet.validate_schema"):
+            _ = df.dtypes   # forces schema resolution if lazy
+
     size_mb  = PARQUET_FILE.stat().st_size / 1024 ** 2
     duration = _metrics["read_parquet"]["duration_seconds"]
     row_count = len(df)
-
     _metrics["read_parquet"].update({
         "rows_read":       row_count,
         "parquet_size_mb": round(size_mb, 2),
         "rows_per_second": round(row_count / duration, 0),
-        "mb_per_second":   round(size_mb   / duration, 2),
+        "mb_per_second":   round(size_mb / duration, 2),
     })
 
     logger.info(

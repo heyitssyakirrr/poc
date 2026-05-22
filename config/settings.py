@@ -26,7 +26,7 @@ PARQUET_ROW_GROUP_SIZE = 100_000    # affects read performance
 
 # ── Flask Dashboard ────────────────────────────────────────────────────────────
 DASHBOARD_TITLE = "POC — Data Pipeline Performance"
-DASHBOARD_HOST  = "0.0.0.0"    # 0.0.0.0 allows LAN access; use 127.0.0.1 for local only
+DASHBOARD_HOST  = "127.0.0.1"    # 0.0.0.0 allows LAN access; use 127.0.0.1 for local only
 DASHBOARD_PORT  = 5000
 DASHBOARD_DEBUG = True         # never True in a bank environment
 
