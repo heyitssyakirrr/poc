@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # main.py
-# Single entry point — generate → read → save metrics → launch dashboard.
+# Single entry point — generate → read → save metrics → export report → launch dashboard.
 #
 # Usage:
 #   python main.py              full pipeline then open dashboard
@@ -29,6 +29,7 @@ from config.settings import PARQUET_FILE, DASHBOARD_HOST, DASHBOARD_PORT, DASHBO
 from src.generator import generate_parquet
 from src.reader    import read_parquet
 from src.timer     import save_metrics, get_metrics
+from src.dashboard.report import export_report 
 
 
 # ── System info ────────────────────────────────────────────────────────────────
@@ -51,8 +52,6 @@ def _system_info() -> dict:
 
 
 # ── Pipeline step functions ────────────────────────────────────────────────────
-# Each function is self-contained. To add a step: write a function here,
-# then add it to PIPELINE_STEPS below — nothing else needs to change.
 
 def step_generate() -> None:
     logger.info("STEP — Generate rows → Parquet")
@@ -68,20 +67,15 @@ def step_read() -> None:
 
 
 # ── Steps registry ─────────────────────────────────────────────────────────────
-# Order matters — steps run top-to-bottom.
-# Each tuple: (cli_flag_name, function)
-# A --<name> CLI flag is auto-generated for every entry.
 PIPELINE_STEPS: list[tuple[str, callable]] = [
     ("generate", step_generate),
     ("read",     step_read),
-    # ("validate", step_validate),   ← example: just uncomment to add a step
 ]
 
 
-# ── Dashboard (not in registry — always runs last, after metrics are saved) ───
+# ── Dashboard ──────────────────────────────────────────────────────────────────
 
 def step_dashboard() -> None:
-    """Launch the FastAPI dashboard (blocking — call last)."""
     import uvicorn
     from src.dashboard.assets import ensure_plotly_js
 
@@ -108,7 +102,16 @@ def _parse_args() -> argparse.Namespace:
             action="store_true",
             help=f"Run only the '{name}' step (skips all others and dashboard)",
         )
-    p.add_argument("--dashboard", action="store_true", help="Launch dashboard only (metrics must exist)")
+    p.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="Launch dashboard only (metrics must exist)",
+    )
+    p.add_argument(
+        "--no-report",
+        action="store_true",
+        help="Skip static HTML report export",
+    )
     return p.parse_args()
 
 
@@ -116,14 +119,10 @@ def main() -> None:
     args     = _parse_args()
     sys_info = _system_info()
 
-    # --dashboard: skip pipeline entirely
     if args.dashboard:
         step_dashboard()
         return
 
-    # Determine which steps to run:
-    # If any specific step flag was passed → run only that step.
-    # Otherwise → run all steps in order.
     selected = [name for name, _ in PIPELINE_STEPS if getattr(args, name, False)]
     run_all  = not selected
 
@@ -145,12 +144,17 @@ def main() -> None:
                 f"  {step:<42} "
                 f"{vals['duration_seconds']:.2f}s  |  "
                 f"peak RAM {vals.get('ram_peak_mb', 0):.0f} MB  |  "
-                f"CPU {vals.get('cpu_percent', 0):.1f}%"
+                f"CPU {vals.get('cpu_proc_avg_percent', vals.get('cpu_avg_percent', 0)):.1f}%"
             )
     logger.success("─" * 60)
 
-    # Launch dashboard after a full run or a read-only run,
-    # but not after a generate-only run (no metrics to show yet).
+    # Export static HTML report (skipped for generate-only runs — no read metrics yet)
+    skip_report = selected == ["generate"]
+    if not skip_report and not args.no_report:
+        report_path = export_report()
+        if report_path:
+            logger.success(f"Share this file → {report_path}")
+
     skip_dashboard = selected == ["generate"]
     if not skip_dashboard:
         step_dashboard()

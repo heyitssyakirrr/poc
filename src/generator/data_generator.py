@@ -106,7 +106,7 @@ def generate_parquet() -> None:
                 writer.close()
 
     # Patch throughput into the parent step entry via the public API —
-    # no direct access to timer internals.
+    # no direct access to timer internals
     size_mb  = PARQUET_FILE.stat().st_size / 1024 ** 2
     duration = get_metrics()[STEP_WRITE]["duration_seconds"]
 
